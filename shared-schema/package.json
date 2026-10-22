@@ -1,9 +1,19 @@
 {
   "name": "@finplanner/shared-schema",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "private": true,
+  "type": "module",
   "license": "Apache-2.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
-    "typecheck": "echo 'no sources yet (M1)' && exit 0"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
   }
 }
