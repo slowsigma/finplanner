@@ -3,5 +3,7 @@ dist/
 .turbo/
 coverage/
 out/
+test-results/
+playwright-report/
 *.tsbuildinfo
 .DS_Store

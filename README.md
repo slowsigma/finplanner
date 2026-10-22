@@ -4,7 +4,7 @@ Long-term personal financial planning: net worth, multi-decade projections, reti
 readiness, and scenario analysis under uncertainty. Fully local, offline-only, no accounts,
 no backend. Projections and education — not financial advice.
 
-**Status: M0 (engine spike).** Planning docs live in the `Pirene/finplanner` vault
+**Status: M1 (data model + PWA shell + G1/G3 gates green).** Planning docs live in the `Pirene/finplanner` vault
 (`FEATURE_SPEC.md`, `TECH_DECISIONS.md` — binding decisions D1–D14 — and `PLAN.md`, this
 repo's milestone gate plan).
 
@@ -23,6 +23,16 @@ pnpm typecheck   # tsc across the workspace
 pnpm test        # vitest: golden/property/determinism gates (D10)
 pnpm bench       # engine G0 benchmark + fan-chart debug output -> engine/out/fan.csv
 ```
+
+## Decisions taken during milestones
+
+- **Tax-wrapper abstraction (M1)**: tax treatment is NOT a per-account flag. `accounts.type`
+  is a closed enum (schema v1 CHECK); each type maps to a policy record inside
+  `assumptions_sets.data_json.tax` (M2 formalizes it): contribution limit, employer-match
+  model, deductibility of contributions, withdrawal taxation (`ordinary` |
+  `qualified_tax_free` | triple-exemption for HSA), RMD and early-withdrawal rules. New
+  wrappers arrive only via forward-only schema migrations (R5), never free-form user strings —
+  the engine must always know a type's semantics to stay auditable (R3).
 
 ## Engineering invariants (do not regress)
 

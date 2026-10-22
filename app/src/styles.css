@@ -1,0 +1,111 @@
+:root {
+  color-scheme: dark;
+  --bg: #0e1116;
+  --panel: #161b22;
+  --border: #2d333b;
+  --text: #e6edf3;
+  --dim: #8b949e;
+  --accent: #4493f8;
+  --pos: #3fb950;
+  --neg: #f85149;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.5 system-ui, sans-serif;
+}
+
+header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+header h1 { font-size: 17px; margin: 0; }
+header .tag { color: var(--dim); font-size: 12px; }
+
+nav {
+  display: flex;
+  gap: 4px;
+  padding: 8px 20px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+nav button {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--dim);
+  padding: 6px 12px;
+  font: inherit;
+  cursor: pointer;
+}
+
+nav button[aria-current="page"] {
+  color: var(--text);
+  background: var(--panel);
+  border-color: var(--border);
+}
+
+main { padding: 20px; max-width: 860px; }
+
+section.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 18px;
+  margin-bottom: 16px;
+}
+
+section.card h2 { margin: 0 0 10px; font-size: 15px; }
+
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--border); }
+th { color: var(--dim); font-weight: 500; font-size: 12px; text-transform: uppercase; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.total td { font-weight: 600; }
+.pos { color: var(--pos); }
+.neg { color: var(--neg); }
+
+form.inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-end;
+  margin-top: 12px;
+}
+
+form.inline label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--dim); }
+
+input, select, button.primary {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 9px;
+  font: inherit;
+}
+
+input[type="number"] { width: 110px; }
+input[type="text"], input[type="password"], input[type="date"] { width: 150px; }
+
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; cursor: pointer; }
+button.link { background: none; border: none; color: var(--dim); cursor: pointer; font: inherit; padding: 0; }
+button.link:hover { color: var(--neg); }
+
+.big { font-size: 28px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.dim { color: var(--dim); }
+.err { color: var(--neg); white-space: pre-wrap; }
+.note { font-size: 12px; color: var(--dim); max-width: 60ch; }
+
+canvas { width: 100%; height: 160px; display: block; }
+
+.boot { padding: 40px; }
