@@ -1,0 +1,31 @@
+# FinPlanner
+
+Long-term personal financial planning: net worth, multi-decade projections, retirement
+readiness, and scenario analysis under uncertainty. Fully local, offline-only, no accounts,
+no backend. Projections and education — not financial advice.
+
+**Status: M0 (engine spike).** Planning docs live in the `Pirene/finplanner` vault
+(`FEATURE_SPEC.md`, `TECH_DECISIONS.md` — binding decisions D1–D14 — and `PLAN.md`, this
+repo's milestone gate plan).
+
+## Layout
+
+- `engine/` — TypeScript simulation engine (D2-C: TS first; Rust/WASM port only if the G0
+  benchmark gate fails). The TS engine is the permanent reference implementation (D10).
+- `app/` — PWA (M1: React + Vite + SQLite-over-OPFS).
+- `shared-schema/` — versioned SQLite schema + migrations (M1).
+
+## Commands
+
+```sh
+pnpm install
+pnpm typecheck   # tsc across the workspace
+pnpm test        # vitest: golden/property/determinism gates (D10)
+pnpm bench       # engine G0 benchmark + fan-chart debug output -> engine/out/fan.csv
+```
+
+## Engineering invariants (do not regress)
+
+- Determinism: same seed + assumptions ⇒ bit-identical results (R2/D9).
+- Offline-only: zero runtime network requests — CSP + CI egress test arrive in M1 (D3).
+- No backend, no auth, no aggregation (D7/D12/D8).

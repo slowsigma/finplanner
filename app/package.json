@@ -1,0 +1,9 @@
+{
+  "name": "@finplanner/app",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "scripts": {
+    "typecheck": "echo 'no sources yet (M1)' && exit 0"
+  }
+}

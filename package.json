@@ -1,0 +1,14 @@
+{
+  "name": "finplanner",
+  "private": true,
+  "license": "Apache-2.0",
+  "packageManager": "pnpm@12.15.0",
+  "scripts": {
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "bench": "turbo run bench"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0"
+  }
+}
