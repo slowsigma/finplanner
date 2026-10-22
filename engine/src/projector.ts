@@ -93,6 +93,16 @@ export interface ProjectionParams {
   accounts: readonly AccountSpec[];
   /** Real arithmetic mean return per named asset class. */
   assetReturns: Readonly<Record<string, number>>;
+  /**
+   * Optional per-year overrides (index 0 = startYear) used by Monte Carlo
+   * trials; falls back to assetReturns for classes/years not provided.
+   */
+  assetReturnsByYear?: Readonly<Record<string, readonly number[]>>;
+  /**
+   * Optional per-year multiplicative spending shocks (B2.7, index 0 =
+   * startYear), e.g. exp(σx − σ²/2) draws with mean ≈ 1. Defaults to none.
+   */
+  spendingShocksByYear?: readonly number[];
   incomeStreams: readonly IncomeStreamSpec[];
   liabilities: readonly LiabilitySpec[];
   oneOffSpends: readonly OneOffSpendSpec[];
@@ -133,22 +143,22 @@ interface PreparedAccount {
   match: EmployerMatchRule | null;
   contributionPriority: number;
   withdrawalPriority: number;
-  accountReturn: number;
+  /** One effective return per horizon year (static when no override given). */
+  accountReturns: number[];
   balance: number;
 }
 
-function resolveAccountReturn(
+function resolveAccountReturns(
   allocations: readonly AccountAllocation[],
-  assetReturns: Readonly<Record<string, number>>,
+  params: ProjectionParams,
   id: string,
-): number {
+): number[] {
   if (allocations.length === 0) {
     throw new Error(`account ${id} needs at least one allocation`);
   }
   let sum = 0;
-  let weighted = 0;
   for (const a of allocations) {
-    const r = assetReturns[a.assetClass];
+    const r = params.assetReturns[a.assetClass];
     if (r === undefined) {
       throw new Error(`account ${id}: unknown asset class '${a.assetClass}'`);
     }
@@ -156,12 +166,21 @@ function resolveAccountReturn(
       throw new Error(`account ${id}: weight for '${a.assetClass}' out of (0,1]`);
     }
     sum += a.weight;
-    weighted += a.weight * r;
   }
   if (Math.abs(sum - 1) > 1e-9) {
     throw new Error(`account ${id}: allocation weights must sum to 1, got ${sum}`);
   }
-  return weighted;
+  const returns: number[] = [];
+  for (let y = 0; y < params.horizonYears; y++) {
+    let weighted = 0;
+    for (const a of allocations) {
+      const override = params.assetReturnsByYear?.[a.assetClass];
+      const r = override && y < override.length ? override[y]! : params.assetReturns[a.assetClass]!;
+      weighted += a.weight * r;
+    }
+    returns.push(weighted);
+  }
+  return returns;
 }
 
 function byPrioThenById(a: { prio: number; id: string }, b: { prio: number; id: string }): number {
@@ -205,7 +224,7 @@ export function projectPlan(params: ProjectionParams): ProjectionResult {
       match: spec.match === undefined ? rules.employerMatch : spec.match,
       contributionPriority: spec.contributionPriority ?? 100,
       withdrawalPriority: spec.withdrawalPriority ?? 100,
-      accountReturn: resolveAccountReturn(spec.allocations, params.assetReturns, spec.id),
+      accountReturns: resolveAccountReturns(spec.allocations, params, spec.id),
       balance: spec.initialBalance,
     };
   });
@@ -232,7 +251,7 @@ export function projectPlan(params: ProjectionParams): ProjectionResult {
   for (let i = 1; i <= params.horizonYears; i++) {
     const year = params.startYear + i - 1;
 
-    for (const p of prepared) p.balance *= 1 + p.accountReturn;
+    for (const p of prepared) p.balance *= 1 + p.accountReturns[i - 1]!;
     for (const l of liabilities) l.balance *= 1 + l.spec.realRate;
 
     let income = 0;
@@ -254,7 +273,8 @@ export function projectPlan(params: ProjectionParams): ProjectionResult {
 
     const { annualNow, annualRetirement, retirementStartYear } = params.spending;
     const retired = retirementStartYear !== null && year >= retirementStartYear;
-    const spending = retired ? annualRetirement : annualNow;
+    const spending =
+      (retired ? annualRetirement : annualNow) * (params.spendingShocksByYear?.[i - 1] ?? 1);
 
     const netCashflow = income - spending - oneOffSpends - debtPayments;
 

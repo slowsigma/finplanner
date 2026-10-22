@@ -333,3 +333,27 @@ export function recordSnapshot(db: AppDatabase, date = new Date().toISOString().
     uuid(), household, date, now.assets, now.liabilities, now.netWorth,
   );
 }
+
+export interface ScenarioRunRow {
+  id: string;
+  label: string;
+  savings_rate: number | null;
+  data_json: string;
+}
+
+/** Store one Monte Carlo scenario run incl. assumption-set hash (B2.2, R3). */
+export function saveScenarioRun(db: AppDatabase, label: string, data: unknown, savingsRate: number | null = null): string {
+  const household = householdId(db);
+  if (!household) throw new Error("household required");
+  const id = uuid();
+  runMut(db, "INSERT INTO plans (id, household_id, label, savings_rate, data_json) VALUES (?, ?, ?, ?, ?)",
+    id, household, label, savingsRate, JSON.stringify(data));
+  return id;
+}
+
+export function listScenarioRuns(db: AppDatabase, limit = 10): ScenarioRunRow[] {
+  return db.sql.all(
+    "SELECT id, label, savings_rate, data_json FROM plans ORDER BY rowid DESC LIMIT ?",
+    limit,
+  ) as unknown as ScenarioRunRow[];
+}

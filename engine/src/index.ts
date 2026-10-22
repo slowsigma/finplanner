@@ -20,8 +20,7 @@ export type { EmployerMatchRule, WrapperRules, WrapperType } from "./wrappers.ts
 export { projectPlan } from "./projector.ts";
 export { assessGoal, assessGoals, fiAssessment, fiNumber, requiredAnnualSavings } from "./goals.ts";
 export type { FiAssessment, GoalAssessment, GoalKind, GoalSpec } from "./goals.ts";
-export type {
-  AccountAllocation,
+export type { AccountAllocation,
   AccountSpec,
   IncomeKind,
   IncomeStreamSpec,
@@ -32,3 +31,9 @@ export type {
   SpendingSpec,
   YearRow,
 } from "./projector.ts";
+export { assumptionsHash, canonicalJson, fnv1aHex, generateReturns, validateMarket } from "./market.ts";
+export type { AssetClassAssumption, MarketAssumptions, TrialReturnSet } from "./market.ts";
+export { goalOutcome, mcSummary, simulateMcTrial, simulatePlanMonteCarlo, stressWindowCount } from "./mcsim.ts";
+export type { McGoalSummary, McResult, McSimParams, McSummary, McTrialRun, StressConfig } from "./mcsim.ts";
+export { controlVariateStats } from "./cv.ts";
+export type { CvStat } from "./cv.ts";
