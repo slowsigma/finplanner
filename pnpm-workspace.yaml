@@ -2,5 +2,5 @@ packages:
   - engine
   - app
   - shared-schema
-onlyBuiltDependencies:
-  - esbuild
+allowBuilds:
+  esbuild: true
