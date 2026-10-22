@@ -4,9 +4,9 @@ Long-term personal financial planning: net worth, multi-decade projections, reti
 readiness, and scenario analysis under uncertainty. Fully local, offline-only, no accounts,
 no backend. Projections and education — not financial advice.
 
-**Status: M1 (data model + PWA shell + G1/G3 gates green).** Planning docs live in the `Pirene/finplanner` vault
-(`FEATURE_SPEC.md`, `TECH_DECISIONS.md` — binding decisions D1–D14 — and `PLAN.md`, this
-repo's milestone gate plan).
+**Status: M1 (data model + PWA shell + G1/G3 gates green).** Planning docs live in this repo's `docs/`
+directory (`FEATURE_SPEC.md`, `TECH_DECISIONS.md` — binding decisions D1–D14 — `LEGAL_TERMS_DRAFT.md`,
+and `PLAN.md`, this repo's milestone gate plan).
 
 ## Layout
 
@@ -14,6 +14,7 @@ repo's milestone gate plan).
   benchmark gate fails). The TS engine is the permanent reference implementation (D10).
 - `app/` — PWA (M1: React + Vite + SQLite-over-OPFS).
 - `shared-schema/` — versioned SQLite schema + migrations (M1).
+- `docs/` — planning and legal docs (feature spec, binding tech decisions, milestone plan, terms draft).
 
 ## Commands
 
