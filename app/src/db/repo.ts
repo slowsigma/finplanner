@@ -21,6 +21,32 @@ export interface AccountRow {
   type: string;
   balance: number;
   as_of_date: string;
+  planned_contribution: number;
+  contribution_limit: number | null;
+  match_rate: number | null;
+  match_up_to_share: number | null;
+}
+
+export interface AllocationRow {
+  account_id: string;
+  asset_class: string;
+  weight: number;
+}
+
+export interface OneOffRow {
+  id: string;
+  label: string;
+  category: string;
+  amount: number;
+  first_year: number;
+  repeat_every_years: number | null;
+  extra_inflation: number;
+}
+
+export interface AssumptionsRow {
+  id: string;
+  label: string;
+  data_json: string;
 }
 
 export interface LiabilityRow {
@@ -142,9 +168,96 @@ export function listAccounts(db: AppDatabase): AccountRow[] {
 
 export function addAccount(db: AppDatabase, a: Omit<AccountRow, "id">): void {
   runMut(db, 
-    "INSERT INTO accounts (id, person_id, label, type, balance, as_of_date) VALUES (?, ?, ?, ?, ?, ?)",
+    `INSERT INTO accounts (id, person_id, label, type, balance, as_of_date,
+       planned_contribution, contribution_limit, match_rate, match_up_to_share)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     uuid(), a.person_id, a.label, a.type, a.balance, a.as_of_date,
+    a.planned_contribution, a.contribution_limit, a.match_rate, a.match_up_to_share,
   );
+}
+
+export function listAllocations(db: AppDatabase): AllocationRow[] {
+  return db.sql.all("SELECT * FROM account_allocations ORDER BY rowid") as unknown as AllocationRow[];
+}
+
+export function addAllocation(db: AppDatabase, accountId: string, assetClass: string, weightPct: number): void {
+  const rows = listAllocations(db).filter((r) => r.account_id === accountId);
+  const used = rows.reduce((s, r) => s + r.weight, 0);
+  const weight = weightPct / 100;
+  if (used + weight > 1 + 1e-9) throw new Error(`allocations would exceed 100% (used ${(used * 100).toFixed(0)}%)`);
+  if (rows.some((r) => r.asset_class === assetClass)) throw new Error(`${assetClass} already in this allocation`);
+  runMut(db,
+    "INSERT INTO account_allocations (account_id, asset_class, weight) VALUES (?, ?, ?)",
+    accountId, assetClass, weight,
+  );
+}
+
+export function deleteAllocation(db: AppDatabase, accountId: string, assetClass: string): void {
+  runMut(db, "DELETE FROM account_allocations WHERE account_id = ? AND asset_class = ?", accountId, assetClass);
+}
+
+export function listOneOffSpends(db: AppDatabase): OneOffRow[] {
+  return db.sql.all("SELECT * FROM one_off_spends ORDER BY first_year, rowid") as unknown as OneOffRow[];
+}
+
+export function addOneOffSpend(db: AppDatabase, o: Omit<OneOffRow, "id">): void {
+  const household = householdId(db);
+  if (!household) throw new Error("household required");
+  runMut(db,
+    `INSERT INTO one_off_spends (id, household_id, label, category, amount, first_year, repeat_every_years, extra_inflation)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    uuid(), household, o.label, o.category, o.amount, o.first_year, o.repeat_every_years, o.extra_inflation,
+  );
+}
+
+export function deleteOneOffSpend(db: AppDatabase, id: string): void {
+  runMut(db, "DELETE FROM one_off_spends WHERE id = ?", id);
+}
+
+export interface GoalRow {
+  id: string;
+  label: string;
+  kind: string;
+  target_year: number | null;
+  target_amount: number | null;
+  annual_retirement_need: number | null;
+  success_probability: number;
+}
+
+export function listGoals(db: AppDatabase): GoalRow[] {
+  return db.sql.all("SELECT * FROM goals ORDER BY target_year, rowid") as unknown as GoalRow[];
+}
+
+export function addGoal(db: AppDatabase, g: Omit<GoalRow, "id" | "success_probability">): void {
+  const household = householdId(db);
+  if (!household) throw new Error("household required");
+  runMut(db,
+    `INSERT INTO goals (id, household_id, label, kind, target_year, target_amount, annual_retirement_need)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    uuid(), household, g.label, g.kind, g.target_year, g.target_amount, g.annual_retirement_need,
+  );
+}
+
+export function deleteGoal(db: AppDatabase, id: string): void {
+  runMut(db, "DELETE FROM goals WHERE id = ?", id);
+}
+
+export function getDefaultAssumptions(db: AppDatabase): AssumptionsRow | undefined {
+  return db.sql.get("SELECT * FROM assumptions_sets WHERE is_default = 1 LIMIT 1") as unknown as
+    | AssumptionsRow
+    | undefined;
+}
+
+export function seedDefaultAssumptions(db: AppDatabase, data: unknown): void {
+  if (getDefaultAssumptions(db)) return;
+  runMut(db,
+    "INSERT INTO assumptions_sets (id, label, is_default, data_json) VALUES (?, ?, 1, ?)",
+    uuid(), "Default (unvalidated)", JSON.stringify(data),
+  );
+}
+
+export function updateDefaultAssumptions(db: AppDatabase, data: unknown): void {
+  runMut(db, "UPDATE assumptions_sets SET data_json = ? WHERE is_default = 1", JSON.stringify(data));
 }
 
 export function deleteAccount(db: AppDatabase, id: string): void {

@@ -6,12 +6,18 @@ import { Backup } from "./components/Backup.tsx";
 import { CashFlow } from "./components/CashFlow.tsx";
 import { Household } from "./components/Household.tsx";
 import { NetWorth } from "./components/NetWorth.tsx";
+import { Plan } from "./components/Plan.tsx";
+import { Goals } from "./components/Goals.tsx";
+import { ImportTab } from "./components/ImportTab.tsx";
 
 const TABS = [
   ["networth", "Net worth"],
   ["household", "Household"],
   ["accounts", "Accounts"],
   ["cashflow", "Cash flow"],
+  ["plan", "Plan"],
+  ["goals", "Goals"],
+  ["import", "Import"],
   ["backup", "Backup"],
 ] as const;
 
@@ -47,6 +53,9 @@ export function App({ db }: { db: AppDatabase }) {
         {tab === "household" && <Household {...shared} />}
         {tab === "accounts" && <Accounts {...shared} />}
         {tab === "cashflow" && <CashFlow {...shared} />}
+        {tab === "plan" && <Plan {...shared} />}
+        {tab === "goals" && <Goals {...shared} />}
+        {tab === "import" && <ImportTab />}
         {tab === "backup" && <Backup db={db} refresh={refresh} />}
       </main>
     </>

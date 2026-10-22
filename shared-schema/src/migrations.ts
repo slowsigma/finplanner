@@ -137,8 +137,19 @@ CREATE INDEX idx_accounts_person ON accounts(person_id);
 CREATE INDEX idx_income_person ON income_streams(person_id);
 `;
 
+// M2 (B1.2): projection inputs carried per account. NULL limits/matches fall
+// back to the engine's D15 WrapperRules presets; a non-null match_rate defines
+// an employer match on top of employee contributions.
+const PROJECTION_FIELDS_V2 = `
+ALTER TABLE accounts ADD COLUMN planned_contribution REAL NOT NULL DEFAULT 0;
+ALTER TABLE accounts ADD COLUMN contribution_limit REAL;
+ALTER TABLE accounts ADD COLUMN match_rate REAL;
+ALTER TABLE accounts ADD COLUMN match_up_to_share REAL;
+`;
+
 export const MIGRATIONS: readonly Migration[] = [
   { version: 1, name: "baseline-v1", sql: BASELINE_V1 },
+  { version: 2, name: "projection-fields", sql: PROJECTION_FIELDS_V2 },
 ];
 
 export const SCHEMA_VERSION: number = MIGRATIONS[MIGRATIONS.length - 1]!.version;

@@ -37,6 +37,7 @@ Status legend: `PROPOSED` (this doc) → `ACCEPTED` (owner sign-off) → `SUPERS
 | D12 | Auth & account model                  | **None — no accounts, ever, while offline-only D3 stands** (supersedes)                      | ACCEPTED (2026-10-21)                   |
 | D13 | Licensing & openness posture          | **Whole project open source under Apache-2.0** (supersedes MIT)                              | ACCEPTED (2026-10-21, revised same day) |
 | D14 | Terms of use, disclaimers & consent   | Clickwrap first-run agreement + persistent "not advice" notices                              | ACCEPTED (2026-10-21)                   |
+| D15 | Tax-wrapper abstraction               | US-only wrapper types in schema v1; engine coded against internal `WrapperRules` layer      | ACCEPTED (2026-10-22)                   |
 
 ---
 
@@ -267,6 +268,33 @@ disclaimer conventions, and Apache-2.0 §§15–16; needs `[BRACKETS]` filled + 
 
 ---
 
+## D15 — Tax-wrapper abstraction (M1 open question, resolved before M2)
+
+The M2 tax model (B1.3) needs a stance on how account types map to tax behavior. Schema v1
+CHECK-constrains `accounts.type` to US types (`taxable`, `tax_deferred`, `tax_free`, `hsa`,
+`529`, `defined_benefit`, `real_estate`, `other`).
+
+Options:
+- **A. Hard-code US all the way.** Engine tax logic switches on the raw type strings.
+  Fastest now; non-US support later means touching tax logic everywhere. Rejected.
+- **B. Generic wrapper table now.** Migrate schema to behavior flags
+  (tax-on-contribution / growth / withdrawal) with US presets seeded. Most general, but
+  delays the M2 core and freezes a taxonomy we have no second-jurisdiction data to validate.
+  Rejected.
+- **C. US-only in schema, layered in the engine (ACCEPTED).** Keep schema v1 unchanged.
+  The engine never branches on account-type strings directly; it resolves each account to an
+  internal `WrapperRules` object (contribution limits, employer-match rules, and — from the
+  B1.3 tax work — contribution/growth/withdrawal tax behavior). All US specifics live in
+  one rules-definition module.
+
+Rationale: correctness velocity for MVP (US-focused per FEATURE_SPEC §2/§15) without
+baking type strings into engine logic. Non-US later = new `WrapperRules` definitions + a
+schema migration adding types — no tax-logic rewrite. HSA rules still get IRS-source
+validation before B1.3 (per §14 plan table); when validated rules differ from defaults, the
+rules module is the single place they change.
+
+---
+
 ## Decision log
 
 *(Append entries as decisions are made.)*
@@ -289,3 +317,4 @@ disclaimer conventions, and Apache-2.0 §§15–16; needs `[BRACKETS]` filled + 
 | 2026-10-21 | D9 | ACCEPTED as recommended (seedable PCG/xoshiro, Sobol + antithetic, deterministic reduce, per-trial streams) | Owner sign-off. |
 | 2026-10-21 | D10 | ACCEPTED as recommended (golden/property/differential tests, seeded snapshots, CI reporting of sampling CIs) | Owner sign-off; tests run as CI gates. |
 | 2026-10-21 | D11 | ACCEPTED as recommended, amended: static file distribution only (no Fly/VPS — no servers under D3/D7); pnpm+Turborepo, Vitest+Playwright, GH Actions, throttled perf gating | Owner sign-off; hosting amendment forced by D3/D7, logged rather than silently rewritten. |
+| 2026-10-22 | D15 | Tax-wrapper: US-only types stay in schema v1; engine codes against internal `WrapperRules` layer; type strings never branched in engine logic | Resolves M1 open question before M2 tax work (B1.3). Non-US later = new rules definitions + schema migration, no tax-logic rewrite. IRS-source validation for HSA/limits still required before beta (§15). |

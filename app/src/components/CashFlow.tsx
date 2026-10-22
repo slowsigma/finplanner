@@ -3,9 +3,13 @@ import { useState } from "react";
 import type { AppDatabase } from "../db/sqlite.ts";
 import {
   addIncome,
+  addOneOffSpend,
   deleteIncome,
+  deleteOneOffSpend,
   getSpending,
+  householdId,
   listIncome,
+  listOneOffSpends,
   listPersons,
   upsertSpending,
 } from "../db/repo.ts";
@@ -18,7 +22,10 @@ export function CashFlow({ db, version, refresh }: { db: AppDatabase; version: n
   const [error, setError] = useState("");
   const persons = listPersons(db);
   const income = listIncome(db);
+  const oneOffs = listOneOffSpends(db);
   const spending = getSpending(db);
+  const household = householdId(db);
+  const currentYear = new Date().getFullYear();
   const totalIncome = income
     .filter((i) => i.kind === "salary" || i.kind === "rental" || i.kind === "other")
     .reduce((s, i) => s + i.annual_amount, 0);
@@ -109,8 +116,61 @@ export function CashFlow({ db, version, refresh }: { db: AppDatabase; version: n
               </select>
             </Field>
             <Field label="$ per year"><input type="number" name="annual_amount" required data-testid="income-amount" /></Field>
-            <Field label="Real growth %"><input type="number" name="growth" step="0.1" /></Field>
+            <Field label="Real growth %"><input type="number" name="growth" step="0.1" data-testid="income-growth" /></Field>
             <Submit label="Add income" />
+          </FormRow>
+        )}
+      </section>
+      <section className="card">
+        <h2>Scheduled one-off spends (B1.5)</h2>
+        <table data-testid="oneoff-table">
+          <thead>
+            <tr><th>Label</th><th className="num">$ (in first year)</th><th>First year</th><th>Repeat</th><th className="num">Extra infl.</th><th /></tr>
+          </thead>
+          <tbody>
+            {oneOffs.map((o) => (
+              <tr key={o.id}>
+                <td>{o.label}</td>
+                <td className="num">{money(o.amount)}</td>
+                <td>{o.first_year}</td>
+                <td>{o.repeat_every_years !== null ? `every ${o.repeat_every_years} yrs` : "once"}</td>
+                <td className="num">{pct(o.extra_inflation)}</td>
+                <td><DeleteButton testid={`delete-oneoff-${o.id}`} onDelete={() => tryRun(() => deleteOneOffSpend(db, o.id))} /></td>
+              </tr>
+            ))}
+            {oneOffs.length === 0 && <tr><td colSpan={6} className="dim">None yet — cars, roofs, weddings, gap years…</td></tr>}
+          </tbody>
+        </table>
+        {household !== undefined && (
+          <FormRow
+            testid="add-oneoff"
+            onSubmit={(values) =>
+              tryRun(() => {
+                const repeat = String(values.get("repeat") || "");
+                addOneOffSpend(db, {
+                  label: String(values.get("label")),
+                  category: String(values.get("category") || "other"),
+                  amount: Number(values.get("amount")),
+                  first_year: Number(values.get("first_year")),
+                  repeat_every_years: repeat === "" ? null : Number(repeat),
+                  extra_inflation: Number(values.get("extra_inflation") || 0) / 100,
+                });
+              })
+            }
+          >
+            <Field label="Label"><input type="text" name="label" required data-testid="oneoff-label" /></Field>
+            <Field label="Category">
+              <select name="category">
+                {["vehicle", "travel", "home", "education", "wedding", "medical", "other"].map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Amount $"><input type="number" name="amount" required data-testid="oneoff-amount" /></Field>
+            <Field label="First year"><input type="number" name="first_year" required min={currentYear} step="1" defaultValue={currentYear} data-testid="oneoff-year" /></Field>
+            <Field label="Repeat every yrs (blank = once)"><input type="number" name="repeat" min={1} step="1" data-testid="oneoff-repeat" /></Field>
+            <Field label="Extra inflation %"><input type="number" name="extra_inflation" step="0.1" data-testid="oneoff-inflation" /></Field>
+            <Submit label="Add one-off" />
           </FormRow>
         )}
       </section>

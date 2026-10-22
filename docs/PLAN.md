@@ -24,7 +24,7 @@ never restates them, only sequences them.
 
 | Question                                                                  | Blocks              | Resolve by                             |
 | ------------------------------------------------------------------------- | ------------------- | -------------------------------------- |
-| Tax-wrapper abstraction: US-only hard-coding vs. layer from day 1         | M2 data model       | decide during M1, before schema freeze |
+| Tax-wrapper abstraction: US-only hard-coding vs. layer from day 1         | M2 data model       | **RESOLVED 2026-10-22 → D15** (US-only schema, `WrapperRules` layer in engine) |
 | Module F: headline differentiator vs. phase-2 depth                       | M5 scope, marketing | decide at M4 exit                      |
 | ToU final language (counsel review, `[BRACKETS]` in LEGAL_TERMS_DRAFT.md) | public beta (M5)    | start counsel outreach at M3           |
 | HSA rules source validation (IRS, not Wikipedia)                          | B1.3 tax model      | before M2 tax work                     |
