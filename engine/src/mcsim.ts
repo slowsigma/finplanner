@@ -83,6 +83,10 @@ export interface McResult {
   endYear: Int32Array;
   /** Mean-over-classes log growth of the first SEQUENCE_YEARS per trial (C3). */
   earlyLogGrowth: Float64Array;
+  /** Total realized (met) spending per trial (C.3 cost-of-insurance metric). */
+  lifetimeSpending: Float64Array;
+  /** Minimum realized annual spending per trial in/after retirement (C.3). */
+  minSpending: Float64Array;
   /** B2.8 control-variate stats (null in stress replay; null when the design is degenerate). */
   terminalCv?: CvStat;
   successCv?: CvStat;
@@ -263,6 +267,8 @@ export function simulatePlanMonteCarlo(p: McSimParams): McResult {
     goalIds: p.goals.map((g) => g.id),
     endYear: new Int32Array(trials).fill(maxEnd),
     earlyLogGrowth: new Float64Array(trials),
+    lifetimeSpending: new Float64Array(trials),
+    minSpending: new Float64Array(trials),
   };
   const essentialShare = p.essentialShare ?? 0;
   const k = p.market.classes.length;
@@ -281,15 +287,23 @@ export function simulatePlanMonteCarlo(p: McSimParams): McResult {
       }
     }
     const yEnd = run.endYear - startYear + 1;
+    const rStart = p.projection.spending.retirementStartYear;
+    let lifetime = 0;
+    let minSpend = Number.POSITIVE_INFINITY;
     for (let y = 0; y < yEnd; y++) {
       const row = run.result.rows[y]!;
       result.netWorth[t * years + y] = row.netWorth;
+      const realized = row.spending - row.unmetSpending;
+      lifetime += realized;
+      if (rStart === null || row.year >= rStart) minSpend = Math.min(minSpend, realized);
       if (result.ruinYear[t] === 0 && row.unmetSpending > 1e-9) {
         result.ruinYear[t] = row.year;
         const discretionary = row.spending * (1 - essentialShare);
         if (row.unmetSpending > discretionary + 1e-9) result.floorBreach[t] = 1;
       }
     }
+    result.lifetimeSpending[t] = lifetime;
+    result.minSpending[t] = Number.isFinite(minSpend) ? minSpend : 0;
     let allGoals = true;
     for (let g = 0; g < p.goals.length; g++) {
       const outcome = goalOutcome(run.result.rows, p.goals[g]!, p.withdrawalRate);
@@ -332,6 +346,10 @@ export interface McSummary {
   bands: Bands;
   /** C3 sequence-risk: how clustered failures are in below-median early markets. */
   seqRisk: McSeqRisk | null;
+  /** Median realized lifetime spending across trials (C.3 cost of insurance). */
+  medianLifetimeSpend: number;
+  /** Median of per-trial minimum realized annual retirement spending (C.3). */
+  medianMinSpend: number;
 }
 
 export interface McSeqRisk {
@@ -412,5 +430,9 @@ export function mcSummary(result: McResult, goalLabels?: Readonly<Record<string,
     goals,
     bands: { year, byQuantile },
     seqRisk,
+    medianLifetimeSpend: quantileOfSorted(
+      Float64Array.from(result.lifetimeSpending.subarray(0, trials)).sort(), 0.5),
+    medianMinSpend: quantileOfSorted(
+      Float64Array.from(result.minSpending.subarray(0, trials)).sort(), 0.5),
   };
 }

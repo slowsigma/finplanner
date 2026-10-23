@@ -111,3 +111,27 @@ test("Risk tab: SS claim shift, career gap, and C2/C3 readouts", async ({ page }
   await expect(page.getByTestId("risk-success")).toBeVisible();
   expect(await page.getByTestId("risk-ms").innerText()).toContain("ms");
 });
+
+test("Risk tab: mitigation comparison report (C.3)", async ({ page }) => {
+  await bootApp(page);
+  await enterDemoHousehold(page);
+  await page.getByTestId("nav-cashflow").click();
+  await page.getByTestId("spend-now").fill("90000");
+  await page.getByTestId("spend-ret").fill("75000");
+  await page.getByTestId("set-spending").getByRole("button").click();
+  await page.getByTestId("income-label").fill("Salary");
+  await page.getByTestId("income-amount").fill("120000");
+  await page.getByTestId("add-income").getByRole("button").click();
+  await page.getByTestId("nav-risk").click();
+  await expect(page.getByTestId("risk-success")).toBeVisible();
+  await page.getByTestId("slider-ret-spend").fill("150"); // fragile so levers show a delta
+  await expect(page.getByTestId("risk-success")).toBeVisible();
+  await page.getByTestId("mit-run").click();
+  const table = page.getByTestId("mit-table");
+  await expect(table).toBeVisible();
+  await expect(table).toContainText("Current plan");
+  await expect(table).toContainText("Guardrails ±15%");
+  await expect(table).toContainText("2-yr cash buffer");
+  await expect(table.getByRole("row")).toHaveCount(6); // header + 5 variants
+  await expect(table).toContainText("pts");
+});

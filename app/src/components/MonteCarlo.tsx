@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { GoalSpec, McSimParams, ProjectionParams, StressConfig } from "@finplanner/engine";
+import type { GoalSpec, IncomeStreamSpec, McSimParams, ProjectionParams, StressConfig } from "@finplanner/engine";
 import { mcSummary, simulatePlanMonteCarlo, ssClaimFactor } from "@finplanner/engine";
 import type { AppDatabase } from "../db/sqlite.ts";
 import { getSpending, listGoals, listIncome, saveScenarioRun, updateDefaultAssumptions } from "../db/repo.ts";
@@ -24,6 +24,33 @@ const STRESS_PRESETS: Record<string, { eq: number[]; bond: number[] }> = {
 
 function parseReturnsPct(text: string): number[] {
   return (text.match(/-?\d+(?:\.\d+)?/g) ?? []).map((s) => Number(s) / 100);
+}
+
+/** Re-time SS streams by `shift` years from their (effective) claim age (B2.4/D4). */
+function claimShift(
+  streams: readonly IncomeStreamSpec[],
+  shift: number,
+  metaOf: (id: string) => { age: number; birth: number } | undefined,
+): IncomeStreamSpec[] {
+  if (shift === 0) return [...streams];
+  return streams.map((s) => {
+    if (s.kind !== "social_security") return s;
+    const meta = metaOf(s.id);
+    if (!meta) return s;
+    const eff = Math.min(70, Math.max(62, meta.age + shift));
+    let factor = 1;
+    try {
+      factor = ssClaimFactor(eff) / ssClaimFactor(Math.min(70, Math.max(62, meta.age)));
+    } catch {
+      /* stored claim age outside 62–70: shift timing only */
+    }
+    return {
+      ...s,
+      annualAmount: s.annualAmount * factor,
+      startYear: meta.birth + eff,
+      endYear: s.endYear === undefined ? undefined : s.endYear + (eff - meta.age),
+    };
+  });
 }
 
 function Slider(props: {
@@ -53,6 +80,14 @@ function Slider(props: {
   );
 }
 
+interface MitRow {
+  label: string;
+  success: number;
+  p10End: number;
+  medMinSpend: number;
+  medLifetime: number;
+}
+
 export function MonteCarlo({ db, version, refresh }: { db: AppDatabase; version: number; refresh: () => void }) {
   const view = useMemo(() => buildPlan(db), [db, version]);
   const [extraSavings, setExtraSavings] = useState(0);
@@ -68,6 +103,7 @@ export function MonteCarlo({ db, version, refresh }: { db: AppDatabase; version:
   const [stressText, setStressText] = useState<Record<string, string>>({});
   const [seedOffset, setSeedOffset] = useState(0);
   const [saved, setSaved] = useState("");
+  const [mit, setMit] = useState<MitRow[] | null>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
 
   const goals: GoalSpec[] = useMemo(
@@ -83,35 +119,21 @@ export function MonteCarlo({ db, version, refresh }: { db: AppDatabase; version:
     [db, version],
   );
 
+  const claimMeta = (id: string): { age: number; birth: number } | undefined => {
+    if ("error" in view) return undefined;
+    const row = listIncome(db).find((r) => r.id === id);
+    const age = row?.claiming_age;
+    const birth = row ? view.personBirthYear[row.person_id] : undefined;
+    if (!age || birth === undefined) return undefined;
+    return { age, birth };
+  };
+
   const run = useMemo(() => {
     if ("error" in view) return null;
     const base = view.params;
     // SS claiming-age shift (B2.4/D4): move start to birth + effective age and
     // rescale the benefit by the statutory claim factor ratio.
-    let streams = base.incomeStreams;
-    if (ssShift !== 0) {
-      const rows = new Map(listIncome(db).map((r) => [r.id, r]));
-      streams = streams.map((s) => {
-        if (s.kind !== "social_security") return s;
-        const row = rows.get(s.id);
-        const age = row?.claiming_age;
-        const birth = row ? view.personBirthYear[row.person_id] : undefined;
-        if (!age || birth === undefined) return s;
-        const eff = Math.min(70, Math.max(62, age + ssShift));
-        let factor = 1;
-        try {
-          factor = ssClaimFactor(eff) / ssClaimFactor(Math.min(70, Math.max(62, age)));
-        } catch {
-          /* stored claim age outside 62–70: shift timing only */
-        }
-        return {
-          ...s,
-          annualAmount: s.annualAmount * factor,
-          startYear: birth + eff,
-          endYear: s.endYear === undefined ? undefined : s.endYear + (eff - age),
-        };
-      });
-    }
+    let streams = claimShift(base.incomeStreams, ssShift, claimMeta);
     // Career gap (B2.4): N years of zero salary starting startYear+2; pay raises
     // stop accruing during the gap and resume after it.
     if (gapYears > 0) {
@@ -190,6 +212,68 @@ export function MonteCarlo({ db, version, refresh }: { db: AppDatabase; version:
       return { error: e instanceof Error ? e.message : String(e) };
     }
   }, [view, db, goals, extraSavings, retireShift, retSpendPct, trials, longSd, shockPct, ssShift, gapYears, stressMode, stressWindow, stressText, seedOffset]);
+
+  // C.3: same seed/paths, each lever overlaid on the current slider settings.
+  function runComparison() {
+    if (!run || "error" in run) return;
+    const t = Math.max(2, Math.min(trials, 500) - (Math.min(trials, 500) % 2));
+    const labels = Object.fromEntries(goals.map((g) => [g.id, g.label]));
+    const effectiveMeta = (id: string) => {
+      const m = claimMeta(id);
+      return m ? { age: Math.min(70, Math.max(62, m.age + ssShift)), birth: m.birth } : undefined;
+    };
+    const variants: { label: string; params: McSimParams }[] = [
+      { label: "Current plan", params: { ...run.params, trials: t } },
+      {
+        label: "Guardrails ±15%",
+        params: {
+          ...run.params,
+          trials: t,
+          projection: { ...run.params.projection, withdrawalPolicy: { kind: "guardrail" as const, band: 0.15, step: 0.1 } },
+        },
+      },
+      {
+        label: "2-yr cash buffer",
+        params: { ...run.params, trials: t, projection: { ...run.params.projection, cashBufferYears: 2 } },
+      },
+      {
+        label: "Claim SS 3 yrs later",
+        params: {
+          ...run.params,
+          trials: t,
+          projection: { ...run.params.projection, incomeStreams: claimShift(run.params.projection.incomeStreams, 3, effectiveMeta) },
+        },
+      },
+      {
+        label: "+$500/mo savings",
+        params: {
+          ...run.params,
+          trials: t,
+          projection: {
+            ...run.params.projection,
+            incomeStreams: [
+              ...run.params.projection.incomeStreams,
+              { id: "mit-extra-savings", kind: "other" as const, annualAmount: 6000, growthReal: 0, startYear: run.params.projection.startYear },
+            ],
+          },
+        },
+      },
+    ];
+    const rows: MitRow[] = [];
+    for (const v of variants) {
+      try {
+        const r = simulatePlanMonteCarlo(v.params);
+        const s = mcSummary(r, labels, QUANTILES);
+        const p10 = s.bands.byQuantile[0] ?? [];
+        let p10End = Number.NaN;
+        for (const val of p10) if (Number.isFinite(val)) p10End = val;
+        rows.push({ label: v.label, success: s.successRate, p10End, medMinSpend: s.medianMinSpend, medLifetime: s.medianLifetimeSpend });
+      } catch {
+        rows.push({ label: v.label, success: Number.NaN, p10End: Number.NaN, medMinSpend: Number.NaN, medLifetime: Number.NaN });
+      }
+    }
+    setMit(rows);
+  }
 
   const bands = run && !("error" in run) ? run.summary.bands : undefined;
   const retYear = run && !("error" in run) ? run.params.projection.spending.retirementStartYear : null;
@@ -421,7 +505,45 @@ export function MonteCarlo({ db, version, refresh }: { db: AppDatabase; version:
           </button>
         </div>
         {saved && <p className="dim" data-testid="risk-saved">{saved}</p>}
-      </section>
+      
+
+        <section className="card">
+          <h2>Mitigation comparison (C.3)</h2>
+          <p className="dim">
+            Same seed and market paths for every row; each lever is overlaid on your current
+            slider settings. Read it as insurance pricing: success probability bought with
+            median lifetime spending forgone. Snapshot of the settings at click time.
+          </p>
+          <button type="button" data-testid="mit-run" onClick={runComparison} disabled={!run || "error" in run}>
+            Compare mitigations
+          </button>
+          {mit && (
+            <table data-testid="mit-table">
+              <thead>
+                <tr>
+                  <th>Plan</th><th className="num">Success</th><th className="num">Δ success</th>
+                  <th className="num">P10 terminal</th><th className="num">Median min spend/yr</th><th className="num">Median lifetime spend</th>
+                </tr>
+              </thead>
+              <tbody>
+                {mit.map((r, i) => (
+                  <tr key={r.label}>
+                    <td>{r.label}</td>
+                    <td className="num">{Number.isFinite(r.success) ? pct(r.success) : "—"}</td>
+                    <td className="num">
+                      {i === 0 || !Number.isFinite(r.success) || !Number.isFinite(mit[0]!.success)
+                        ? "—"
+                        : `${r.success >= mit[0]!.success ? "+" : ""}${((r.success - mit[0]!.success) * 100).toFixed(1)} pts`}
+                    </td>
+                    <td className="num">{Number.isFinite(r.p10End) ? money(r.p10End) : "—"}</td>
+                    <td className="num">{Number.isFinite(r.medMinSpend) ? money(r.medMinSpend) : "—"}</td>
+                    <td className="num">{Number.isFinite(r.medLifetime) ? money(r.medLifetime) : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section></section>
 
       <section className="card">
         <h2>Historical stress replay (B2.6)</h2>

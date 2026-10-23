@@ -80,6 +80,16 @@ export interface OneOffSpendSpec {
   extraInflation?: number;
 }
 
+/**
+ * Retirement withdrawal policy (C.2 M2), applied inside every trial year.
+ * fixed: baseline real retirement spending. Guardrails (M2): spending steps
+ * up/down by `step` whenever prior-year assets drift past ±`band` of the
+ * retirement-entry baseline (Landscape-style; real-terms flat baseline).
+ */
+export type WithdrawalPolicy =
+  | { kind: "fixed" }
+  | { kind: "guardrail"; band: number; step: number };
+
 export interface SpendingSpec {
   annualNow: number;
   annualRetirement: number;
@@ -107,6 +117,14 @@ export interface ProjectionParams {
   liabilities: readonly LiabilitySpec[];
   oneOffSpends: readonly OneOffSpendSpec[];
   spending: SpendingSpec;
+  /** Retirement withdrawal policy (M2); defaults to fixed. */
+  withdrawalPolicy?: WithdrawalPolicy;
+  /**
+   * Cash-bucket size in years of retirement spending (M1). During retirement
+   * shortfalls draw from this 0%-real reserve first; it is replenished from
+   * the portfolio only in years the invested sleeve did not decline.
+   */
+  cashBufferYears?: number;
 }
 
 export interface YearRow {
@@ -215,6 +233,14 @@ export function projectPlan(params: ProjectionParams): ProjectionResult {
     ids.add(a.id);
   }
 
+  const policy: WithdrawalPolicy = params.withdrawalPolicy ?? { kind: "fixed" };
+  if (policy.kind === "guardrail") {
+    if (!(policy.band > 0 && policy.band < 0.9)) throw new Error("guardrail band must be in (0, 0.9)");
+    if (!(policy.step > 0 && policy.step <= 0.5)) throw new Error("guardrail step must be in (0, 0.5]");
+  }
+  const bufferYears = params.cashBufferYears ?? 0;
+  if (!(bufferYears >= 0) || !Number.isFinite(bufferYears)) throw new Error("cashBufferYears must be a finite number >= 0");
+
   const prepared: PreparedAccount[] = params.accounts.map((spec) => {
     const rules = US_WRAPPER_PRESETS[spec.type];
     return {
@@ -248,11 +274,45 @@ export function projectPlan(params: ProjectionParams): ProjectionResult {
   const liabilities = params.liabilities.map((l) => ({ spec: l, balance: l.balance }));
   const rows: YearRow[] = [];
 
+  let spendIndex = 1;
+  let guardBaseline: number | null = null;
+  let prevAssets: number | null = null;
+  let buffer = 0;
+
   for (let i = 1; i <= params.horizonYears; i++) {
     const year = params.startYear + i - 1;
 
+    let investedStart = 0;
+    for (const p of prepared) investedStart += p.balance;
     for (const p of prepared) p.balance *= 1 + p.accountReturns[i - 1]!;
     for (const l of liabilities) l.balance *= 1 + l.spec.realRate;
+    let investedNow = 0;
+    for (const p of prepared) investedNow += p.balance;
+    const yearGrowth = investedStart > 1e-9 ? investedNow / investedStart : 1;
+
+    const retired =
+      params.spending.retirementStartYear !== null && year >= params.spending.retirementStartYear;
+    if (retired && policy.kind === "guardrail") {
+      if (guardBaseline === null) guardBaseline = investedStart + cashReserve + buffer;
+      else if (prevAssets !== null) {
+        if (prevAssets >= guardBaseline * (1 + policy.band)) spendIndex *= 1 + policy.step;
+        else if (prevAssets <= guardBaseline * (1 - policy.band)) spendIndex *= 1 - policy.step;
+      }
+    }
+    if (retired && bufferYears > 0) {
+      const target = bufferYears * params.spending.annualRetirement;
+      if ((year === params.spending.retirementStartYear || yearGrowth >= 1) && buffer < target) {
+        let room = target - buffer;
+        for (const p of withdrawOrder) {
+          if (room <= 0) break;
+          const move = Math.min(p.balance, room);
+          if (move <= 0) continue;
+          p.balance -= move;
+          buffer += move;
+          room -= move;
+        }
+      }
+    }
 
     let income = 0;
     let salary = 0;
@@ -271,10 +331,9 @@ export function projectPlan(params: ProjectionParams): ProjectionResult {
       debtPayments += pay;
     }
 
-    const { annualNow, annualRetirement, retirementStartYear } = params.spending;
-    const retired = retirementStartYear !== null && year >= retirementStartYear;
+    const { annualNow, annualRetirement } = params.spending;
     const spending =
-      (retired ? annualRetirement : annualNow) * (params.spendingShocksByYear?.[i - 1] ?? 1);
+      (retired ? annualRetirement * spendIndex : annualNow) * (params.spendingShocksByYear?.[i - 1] ?? 1);
 
     const netCashflow = income - spending - oneOffSpends - debtPayments;
 
@@ -306,6 +365,12 @@ export function projectPlan(params: ProjectionParams): ProjectionResult {
       }
     } else {
       let need = -netCashflow;
+      if (buffer > 0) {
+        const take = Math.min(buffer, need);
+        buffer -= take;
+        need -= take;
+        withdrawals += take;
+      }
       if (cashReserve > 0) {
         const take = Math.min(cashReserve, need);
         cashReserve -= take;
@@ -323,7 +388,7 @@ export function projectPlan(params: ProjectionParams): ProjectionResult {
       if (need > 1e-9) unmetSpending = need;
     }
 
-    let totalAssets = cashReserve;
+    let totalAssets = cashReserve + buffer;
     const accountBalances: Record<string, number> = {};
     for (const p of prepared) {
       accountBalances[p.spec.id] = p.balance;
@@ -348,6 +413,7 @@ export function projectPlan(params: ProjectionParams): ProjectionResult {
       netWorth: totalAssets - totalLiabilities,
       accountBalances,
     });
+    prevAssets = totalAssets - 0;
   }
 
   return { rows };

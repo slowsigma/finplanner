@@ -29,6 +29,7 @@ export type { AccountAllocation,
   ProjectionParams,
   ProjectionResult,
   SpendingSpec,
+  WithdrawalPolicy,
   YearRow,
 } from "./projector.ts";
 export { assumptionsHash, canonicalJson, fnv1aHex, generateReturns, validateMarket } from "./market.ts";
