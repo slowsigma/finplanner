@@ -10,6 +10,7 @@ import { Plan } from "./components/Plan.tsx";
 import { Goals } from "./components/Goals.tsx";
 import { MonteCarlo } from "./components/MonteCarlo.tsx";
 import { ImportTab } from "./components/ImportTab.tsx";
+import { TOU_FOOTER, TermsGate, TermsSettingsCard, touAccepted } from "./components/Terms.tsx";
 
 const TABS = [
   ["networth", "Net worth"],
@@ -28,8 +29,11 @@ type Tab = (typeof TABS)[number][0];
 export function App({ db }: { db: AppDatabase }) {
   const [tab, setTab] = useState<Tab>("networth");
   const [version, setVersion] = useState(0);
+  const [accepted, setAccepted] = useState(() => touAccepted(db));
   const refresh = () => setVersion((v) => v + 1);
   const shared = { db, version, refresh };
+
+  if (!accepted) return <TermsGate db={db} onAccept={() => setAccepted(true)} />;
 
   return (
     <>
@@ -59,8 +63,14 @@ export function App({ db }: { db: AppDatabase }) {
         {tab === "goals" && <Goals {...shared} />}
         {tab === "risk" && <MonteCarlo {...shared} />}
         {tab === "import" && <ImportTab />}
-        {tab === "backup" && <Backup db={db} refresh={refresh} />}
+        {tab === "backup" && (
+          <>
+            <Backup db={db} refresh={refresh} />
+            <TermsSettingsCard db={db} onReset={() => setAccepted(false)} />
+          </>
+        )}
       </main>
+      <footer data-testid="tou-footer">{TOU_FOOTER}</footer>
     </>
   );
 }

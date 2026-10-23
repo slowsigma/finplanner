@@ -294,6 +294,29 @@ export function deleteIncome(db: AppDatabase, id: string): void {
   runMut(db, "DELETE FROM income_streams WHERE id = ?", id);
 }
 
+export interface TouAcceptanceRow {
+  version: string;
+  accepted_at: string;
+  source: string;
+}
+
+/** ToU2: local acceptance record per ToU version. */
+export function listTouAcceptance(db: AppDatabase): TouAcceptanceRow[] {
+  return db.sql.all("SELECT * FROM tou_acceptance ORDER BY accepted_at") as unknown as TouAcceptanceRow[];
+}
+
+export function recordTouAcceptance(db: AppDatabase, version: string, source = "clickwrap"): void {
+  runMut(
+    db,
+    "INSERT INTO tou_acceptance (version, accepted_at, source) VALUES (?, ?, ?) ON CONFLICT(version) DO UPDATE SET accepted_at = excluded.accepted_at",
+    version, new Date().toISOString(), source,
+  );
+}
+
+export function clearTouAcceptance(db: AppDatabase): void {
+  runMut(db, "DELETE FROM tou_acceptance");
+}
+
 export function getSpending(db: AppDatabase): SpendingRow | undefined {
   const row = db.sql.get("SELECT * FROM spending_profiles LIMIT 1");
   return row as unknown as SpendingRow | undefined;

@@ -130,6 +130,11 @@ export function CashFlow({ db, version, refresh }: { db: AppDatabase; version: n
             <Submit label="Add income" />
           </FormRow>
         )}
+        <p className="note dim">
+          Social Security and tax figures are simplified estimates of complex, changing
+          law. Informational only — verify with IRS/SSA publications and a qualified CPA
+          or enrolled agent before relying on them.
+        </p>
       </section>
       <section className="card">
         <h2>Scheduled one-off spends (B1.5)</h2>

@@ -13,8 +13,24 @@ const ACCOUNTS = [
 
 export const EXPECTED_NET_WORTH = "$728,700";
 
+export async function acceptTou(page: Page): Promise<void> {
+  const gate = page.getByTestId("tou-gate");
+  const visible = await gate
+    .waitFor({ state: "visible", timeout: 4000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!visible) return;
+  await page.getByTestId("tou-scroll").evaluate((el) => {
+    el.scrollTop = el.scrollHeight;
+  });
+  await page.getByTestId("tou-confirm").check();
+  await page.getByTestId("tou-agree").click();
+  await gate.waitFor({ state: "detached", timeout: 4000 });
+}
+
 export async function bootApp(page: Page): Promise<void> {
   await page.goto("/");
+  await acceptTou(page);
   await expect(page.getByTestId("nav-networth")).toBeVisible();
 }
 

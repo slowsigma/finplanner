@@ -147,9 +147,20 @@ ALTER TABLE accounts ADD COLUMN match_rate REAL;
 ALTER TABLE accounts ADD COLUMN match_up_to_share REAL;
 `;
 
+// M4 (ToU2): locally recorded Terms-of-Use acceptance, one row per ToU
+// version accepted (re-presented on version bumps; never leaves the device).
+const TOU_ACCEPTANCE_V3 = `
+CREATE TABLE tou_acceptance (
+  version     TEXT NOT NULL PRIMARY KEY,
+  accepted_at TEXT NOT NULL,
+  source      TEXT NOT NULL DEFAULT 'clickwrap'
+);
+`;
+
 export const MIGRATIONS: readonly Migration[] = [
   { version: 1, name: "baseline-v1", sql: BASELINE_V1 },
   { version: 2, name: "projection-fields", sql: PROJECTION_FIELDS_V2 },
+  { version: 3, name: "tou-acceptance", sql: TOU_ACCEPTANCE_V3 },
 ];
 
 export const SCHEMA_VERSION: number = MIGRATIONS[MIGRATIONS.length - 1]!.version;
