@@ -76,3 +76,38 @@ test("Risk tab: B2.6 stress replay uses pasted windows", async ({ page }) => {
   await expect(page.getByTestId("risk-success")).toBeVisible();
   await expect(page.getByTestId("risk-cv")).toHaveCount(0);
 });
+
+test("Risk tab: SS claim shift, career gap, and C2/C3 readouts", async ({ page }) => {
+  await bootApp(page);
+  await enterDemoHousehold(page);
+  await page.getByTestId("nav-cashflow").click();
+  await page.getByTestId("spend-now").fill("90000");
+  await page.getByTestId("spend-ret").fill("75000");
+  await page.getByTestId("set-spending").getByRole("button").click();
+  await page.getByTestId("income-label").fill("Salary");
+  await page.getByTestId("income-amount").fill("120000");
+  await page.getByTestId("add-income").getByRole("button").click();
+  await page.getByTestId("income-kind").selectOption("social_security");
+  await page.getByTestId("income-label").fill("SS");
+  await page.getByTestId("income-amount").fill("30000");
+  await page.getByTestId("income-claim-age").fill("67");
+  await page.getByTestId("add-income").getByRole("button").click();
+
+  await page.getByTestId("nav-risk").click();
+  await page.getByTestId("risk-trials").selectOption("1000");
+  await page.getByTestId("slider-ret-spend").fill("150"); // fragile: force failing paths
+  await expect(page.getByTestId("risk-success")).toBeVisible();
+  await expect(page.getByTestId("risk-seqrisk")).toBeVisible();
+  await expect(page.getByTestId("risk-zone")).toBeVisible();
+  await expect(page.getByTestId("risk-zone")).toContainText("(retire)");
+  const baseZone = await page.getByTestId("risk-zone").innerText();
+
+  await page.getByTestId("slider-ss-shift").fill("-5"); // claim at 62: −30% benefit, starts earlier
+  const shiftedZone = await page.getByTestId("risk-zone").innerText();
+  expect(shiftedZone).not.toBe(baseZone);
+  expect(await page.getByTestId("risk-ms").innerText()).toContain("ms");
+
+  await page.getByTestId("slider-gap").fill("2"); // career gap must not crash the sim
+  await expect(page.getByTestId("risk-success")).toBeVisible();
+  expect(await page.getByTestId("risk-ms").innerText()).toContain("ms");
+});

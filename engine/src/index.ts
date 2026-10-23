@@ -33,7 +33,8 @@ export type { AccountAllocation,
 } from "./projector.ts";
 export { assumptionsHash, canonicalJson, fnv1aHex, generateReturns, validateMarket } from "./market.ts";
 export type { AssetClassAssumption, MarketAssumptions, TrialReturnSet } from "./market.ts";
-export { goalOutcome, mcSummary, simulateMcTrial, simulatePlanMonteCarlo, stressWindowCount } from "./mcsim.ts";
-export type { McGoalSummary, McResult, McSimParams, McSummary, McTrialRun, StressConfig } from "./mcsim.ts";
+export { goalOutcome, mcSummary, SEQUENCE_YEARS, simulateMcTrial, simulatePlanMonteCarlo, stressWindowCount } from "./mcsim.ts";
+export type { McGoalSummary, McResult, McSeqRisk, McSimParams, McSummary, McTrialRun, StressConfig } from "./mcsim.ts";
+export { ssClaimFactor } from "./ss.ts";
 export { controlVariateStats } from "./cv.ts";
 export type { CvStat } from "./cv.ts";

@@ -143,6 +143,8 @@ export interface PlanView {
   deathYear: number;
   /** Base death year per person (B2.5 joint longevity). */
   deathYears: number[];
+  /** Person id → birth year (SS claiming-age shifts, B2.4). */
+  personBirthYear: Record<string, number>;
   notes: string[];
 }
 
@@ -245,6 +247,7 @@ export function buildPlan(db: AppDatabase): PlanView | { error: string } {
     marketHash: assumptionsHash(market),
     deathYear,
     deathYears,
+    personBirthYear: Object.fromEntries(persons.map((p) => [p.id, p.birth_year])),
     notes,
   };
 }

@@ -81,6 +81,8 @@ export interface McResult {
    * longevity sampling is off). netWorth entries after it are NaN.
    */
   endYear: Int32Array;
+  /** Mean-over-classes log growth of the first SEQUENCE_YEARS per trial (C3). */
+  earlyLogGrowth: Float64Array;
   /** B2.8 control-variate stats (null in stress replay; null when the design is degenerate). */
   terminalCv?: CvStat;
   successCv?: CvStat;
@@ -144,7 +146,12 @@ export interface McTrialRun {
   logGrowth: Float64Array;
   /** Exact expectation of logGrowth under the lognormal model. */
   logGrowthMean: Float64Array;
+  /** Equal-weight class sum of log(1+r) over the first SEQUENCE_YEARS (C3). */
+  earlyLogGrowth: number;
 }
+
+/** Window used for the sequence-risk score (C3). */
+export const SEQUENCE_YEARS = 10;
 
 /** Number of rolling starts; also validates coverage/uniformity. */
 export function stressWindowCount(stress: StressConfig, market: MarketAssumptions): number {
@@ -208,11 +215,14 @@ export function simulateMcTrial(p: McSimParams, trial: number): McTrialRun {
   const k = p.market.classes.length;
   const logGrowth = new Float64Array(k);
   const logGrowthMean = new Float64Array(k);
+  const earlyYears = Math.min(SEQUENCE_YEARS, yearsTrial);
+  let earlyLogGrowth = 0;
   for (let j = 0; j < k; j++) {
     const c = p.market.classes[j]!;
     const series = byClass[c.name]!;
     let g = 0;
     for (let y = 0; y < yearsTrial; y++) g += Math.log1p(series[y]!);
+    for (let y = 0; y < earlyYears; y++) earlyLogGrowth += Math.log1p(series[y]!);
     logGrowth[j] = g;
     logGrowthMean[j] = yearsTrial * (Math.log1p(c.meanReal) - 0.5 * c.volReal * c.volReal);
   }
@@ -226,6 +236,7 @@ export function simulateMcTrial(p: McSimParams, trial: number): McTrialRun {
     endYear,
     logGrowth,
     logGrowthMean,
+    earlyLogGrowth: k > 0 ? earlyLogGrowth / k : 0,
   };
 }
 
@@ -251,6 +262,7 @@ export function simulatePlanMonteCarlo(p: McSimParams): McResult {
     goalShortfall: new Float64Array(trials * p.goals.length).fill(Number.NaN),
     goalIds: p.goals.map((g) => g.id),
     endYear: new Int32Array(trials).fill(maxEnd),
+    earlyLogGrowth: new Float64Array(trials),
   };
   const essentialShare = p.essentialShare ?? 0;
   const k = p.market.classes.length;
@@ -261,6 +273,7 @@ export function simulatePlanMonteCarlo(p: McSimParams): McResult {
   for (let t = 0; t < trials; t++) {
     const run = simulateMcTrial(p, t);
     result.endYear[t] = run.endYear;
+    result.earlyLogGrowth[t] = run.earlyLogGrowth;
     if (cvOn) {
       for (let j = 0; j < k; j++) {
         design[t * k + j] = run.logGrowth[j]!;
@@ -317,6 +330,15 @@ export interface McSummary {
   goals: McGoalSummary[];
   /** Fan-chart bands (median + requested quantiles) of year-end net worth. */
   bands: Bands;
+  /** C3 sequence-risk: how clustered failures are in below-median early markets. */
+  seqRisk: McSeqRisk | null;
+}
+
+export interface McSeqRisk {
+  /** Share (0–1) of failed paths whose first-SEQUENCE_YEARS market beat was below the all-trial median. */
+  failEarlyShare: number;
+  failedTrials: number;
+  earlyYears: number;
 }
 
 export function mcSummary(result: McResult, goalLabels?: Readonly<Record<string, string>>, quantiles: readonly number[] = [0.1, 0.25, 0.5, 0.75, 0.9]): McSummary {
@@ -324,6 +346,7 @@ export function mcSummary(result: McResult, goalLabels?: Readonly<Record<string,
   let ruined = 0;
   let floored = 0;
   let success = 0;
+  const failed: number[] = [];
   for (let t = 0; t < trials; t++) {
     if (result.ruinYear[t] !== 0) ruined++;
     else if (result.floorBreach[t] !== 0) floored++;
@@ -332,6 +355,7 @@ export function mcSummary(result: McResult, goalLabels?: Readonly<Record<string,
       if (result.goalFunded[t * result.goalIds.length + g] === 0) allGoals = false;
     }
     if (result.ruinYear[t] === 0 && allGoals) success++;
+    else failed.push(t);
   }
   const goals: McGoalSummary[] = result.goalIds.map((id, g) => {
     let funded = 0;
@@ -368,6 +392,14 @@ export function mcSummary(result: McResult, goalLabels?: Readonly<Record<string,
   const ruinRate = ruined / trials;
   const floorBreachRate = floored / trials;
   const successRate = success / trials;
+  let seqRisk: McSeqRisk | null = null;
+  if (failed.length > 0) {
+    const sortedEarly = Float64Array.from(result.earlyLogGrowth.subarray(0, trials)).sort();
+    const med = quantileOfSorted(sortedEarly, 0.5);
+    let earlyBad = 0;
+    for (const t of failed) if (result.earlyLogGrowth[t]! < med) earlyBad++;
+    seqRisk = { failEarlyShare: earlyBad / failed.length, failedTrials: failed.length, earlyYears: SEQUENCE_YEARS };
+  }
   return {
     trials,
     years,
@@ -379,5 +411,6 @@ export function mcSummary(result: McResult, goalLabels?: Readonly<Record<string,
     successHalfWidth: samplingHalfWidth(successRate, trials),
     goals,
     bands: { year, byQuantile },
+    seqRisk,
   };
 }

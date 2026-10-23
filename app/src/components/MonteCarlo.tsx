@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { GoalSpec, McSimParams, ProjectionParams, StressConfig } from "@finplanner/engine";
-import { mcSummary, simulatePlanMonteCarlo } from "@finplanner/engine";
+import { mcSummary, simulatePlanMonteCarlo, ssClaimFactor } from "@finplanner/engine";
 import type { AppDatabase } from "../db/sqlite.ts";
-import { getSpending, listGoals, saveScenarioRun, updateDefaultAssumptions } from "../db/repo.ts";
+import { getSpending, listGoals, listIncome, saveScenarioRun, updateDefaultAssumptions } from "../db/repo.ts";
 import { buildPlan } from "../plan/build.ts";
 import { FormRow, money, pct, Submit } from "./ui.tsx";
 
@@ -61,6 +61,8 @@ export function MonteCarlo({ db, version, refresh }: { db: AppDatabase; version:
   const [trials, setTrials] = useState(500);
   const [longSd, setLongSd] = useState(4);
   const [shockPct, setShockPct] = useState(5);
+  const [ssShift, setSsShift] = useState(0);
+  const [gapYears, setGapYears] = useState(0);
   const [stressMode, setStressMode] = useState<"iid" | "all" | "bootstrap">("iid");
   const [stressWindow, setStressWindow] = useState(10);
   const [stressText, setStressText] = useState<Record<string, string>>({});
@@ -84,15 +86,60 @@ export function MonteCarlo({ db, version, refresh }: { db: AppDatabase; version:
   const run = useMemo(() => {
     if ("error" in view) return null;
     const base = view.params;
+    // SS claiming-age shift (B2.4/D4): move start to birth + effective age and
+    // rescale the benefit by the statutory claim factor ratio.
+    let streams = base.incomeStreams;
+    if (ssShift !== 0) {
+      const rows = new Map(listIncome(db).map((r) => [r.id, r]));
+      streams = streams.map((s) => {
+        if (s.kind !== "social_security") return s;
+        const row = rows.get(s.id);
+        const age = row?.claiming_age;
+        const birth = row ? view.personBirthYear[row.person_id] : undefined;
+        if (!age || birth === undefined) return s;
+        const eff = Math.min(70, Math.max(62, age + ssShift));
+        let factor = 1;
+        try {
+          factor = ssClaimFactor(eff) / ssClaimFactor(Math.min(70, Math.max(62, age)));
+        } catch {
+          /* stored claim age outside 62–70: shift timing only */
+        }
+        return {
+          ...s,
+          annualAmount: s.annualAmount * factor,
+          startYear: birth + eff,
+          endYear: s.endYear === undefined ? undefined : s.endYear + (eff - age),
+        };
+      });
+    }
+    // Career gap (B2.4): N years of zero salary starting startYear+2; pay raises
+    // stop accruing during the gap and resume after it.
+    if (gapYears > 0) {
+      const gapStart = base.startYear + 2;
+      const out = [];
+      for (const s of streams) {
+        if (s.kind === "salary" && s.startYear <= gapStart - 1 && (s.endYear === undefined || s.endYear >= gapStart)) {
+          out.push({ ...s, endYear: Math.min(s.endYear ?? gapStart - 1, gapStart - 1) });
+          const resume = gapStart + gapYears;
+          out.push({
+            ...s,
+            id: `${s.id}-postgap`,
+            annualAmount: s.annualAmount * (1 + s.growthReal) ** (resume - s.startYear),
+            startYear: resume,
+          });
+        } else out.push(s);
+      }
+      streams = out;
+    }
     const projection: ProjectionParams = {
       ...base,
       incomeStreams:
         extraSavings > 0
           ? [
-              ...base.incomeStreams,
+              ...streams,
               { id: "mc-extra-savings", kind: "other" as const, annualAmount: extraSavings, growthReal: 0, startYear: base.startYear },
             ]
-          : base.incomeStreams,
+          : streams,
       spending: {
         annualNow: base.spending.annualNow,
         annualRetirement: base.spending.annualRetirement * (retSpendPct / 100),
@@ -142,9 +189,24 @@ export function MonteCarlo({ db, version, refresh }: { db: AppDatabase; version:
     } catch (e) {
       return { error: e instanceof Error ? e.message : String(e) };
     }
-  }, [view, db, goals, extraSavings, retireShift, retSpendPct, trials, longSd, shockPct, stressMode, stressWindow, stressText, seedOffset]);
+  }, [view, db, goals, extraSavings, retireShift, retSpendPct, trials, longSd, shockPct, ssShift, gapYears, stressMode, stressWindow, stressText, seedOffset]);
 
   const bands = run && !("error" in run) ? run.summary.bands : undefined;
+  const retYear = run && !("error" in run) ? run.params.projection.spending.retirementStartYear : null;
+  const zoneLo = retYear !== null && retYear !== undefined ? retYear - 5 : null;
+  const zoneHi = retYear !== null && retYear !== undefined ? retYear + 5 : null;
+  const zoneRows = useMemo(() => {
+    if (!bands || zoneLo === null || zoneHi === null) return [] as { yr: number; p10: number; p50: number }[];
+    const p10 = bands.byQuantile[0];
+    const p50 = bands.byQuantile[2];
+    if (!p10 || !p50) return [];
+    const out: { yr: number; p10: number; p50: number }[] = [];
+    bands.year.forEach((yr, i) => {
+      if (yr >= zoneLo && yr <= zoneHi && Number.isFinite(p10[i]!) && Number.isFinite(p50[i]!))
+        out.push({ yr, p10: p10[i]!, p50: p50[i]! });
+    });
+    return out;
+  }, [bands, zoneLo, zoneHi]);
   useEffect(() => {
     const el = canvas.current;
     if (!el || !bands || bands.year.length < 2) return;
@@ -177,6 +239,20 @@ export function MonteCarlo({ db, version, refresh }: { db: AppDatabase; version:
     ctx.moveTo(pad, y(0));
     ctx.lineTo(width - pad, y(0));
     ctx.stroke();
+    if (zoneLo !== null && zoneHi !== null) {
+      let i0 = -1;
+      let i1 = -1;
+      bands.year.forEach((yr, i) => {
+        if (i < n && yr >= zoneLo && yr <= zoneHi) {
+          if (i0 === -1) i0 = i;
+          i1 = i;
+        }
+      });
+      if (i0 !== -1 && i1 >= i0) {
+        ctx.fillStyle = "rgba(240, 130, 70, 0.1)";
+        ctx.fillRect(x(i0) - 2, pad, x(i1) - x(i0) + 4, height - 2 * pad);
+      }
+    }
     const band = (lo: number[], hi: number[], fill: string) => {
       ctx.fillStyle = fill;
       ctx.beginPath();
@@ -192,7 +268,7 @@ export function MonteCarlo({ db, version, refresh }: { db: AppDatabase; version:
     ctx.beginPath();
     p50.forEach((v, i) => (i === 0 ? ctx.moveTo(x(i), y(v)) : ctx.lineTo(x(i), y(v))));
     ctx.stroke();
-  }, [bands]);
+  }, [bands, zoneLo, zoneHi]);
 
   if ("error" in view) {
     return (
@@ -234,6 +310,10 @@ export function MonteCarlo({ db, version, refresh }: { db: AppDatabase; version:
             value={longSd} format={(v) => `${v} yr`} onChange={setLongSd} />
           <Slider testid="slider-shock" label="Spending shocks σ" min={0} max={15} step={1}
             value={shockPct} format={(v) => `${v}%`} onChange={setShockPct} />
+          <Slider testid="slider-ss-shift" label="SS claim shift" min={-5} max={3} step={1}
+            value={ssShift} format={(v) => `${v > 0 ? "+" : ""}${v} yr`} onChange={setSsShift} />
+          <Slider testid="slider-gap" label="Career gap" min={0} max={5} step={1}
+            value={gapYears} format={(v) => `${v} yr`} onChange={setGapYears} />
           <label className="slider">
             <span>Trials</span>
             <select data-testid="risk-trials" value={trials} onChange={(e) => setTrials(Number(e.target.value))}>
@@ -252,6 +332,12 @@ export function MonteCarlo({ db, version, refresh }: { db: AppDatabase; version:
             </p>
             <p className="dim" data-testid="risk-ruin">
               out-of-money: {pct(s.ruinRate + s.floorBreachRate)} · essential-spending floor breached: {pct(s.floorBreachRate)}
+            </p>
+            <p className="dim" data-testid="risk-seqrisk">
+              {s.seqRisk
+                ? <>Sequence risk (C3): {pct(s.seqRisk.failEarlyShare)} of the {s.seqRisk.failedTrials} failed paths drew a below-median
+                  first {s.seqRisk.earlyYears} yrs — bad timing, not just bad averages, drives the failures.</>
+                : "No failing paths at these settings — sequence-of-returns exposure is nil."}
             </p>
             {cv && cv.varianceRatio < 0.99 && (
               <p className="dim" data-testid="risk-cv">
@@ -276,6 +362,29 @@ export function MonteCarlo({ db, version, refresh }: { db: AppDatabase; version:
               </table>
             )}
             <canvas ref={canvas} data-testid="risk-chart" />
+            {zoneRows.length > 0 && (
+              <>
+                <table data-testid="risk-zone">
+                  <thead>
+                    <tr><th>Zone year</th><th className="num">P10</th><th className="num">P50</th><th className="num">P10 vs P50</th></tr>
+                  </thead>
+                  <tbody>
+                    {zoneRows.map((r) => (
+                      <tr key={r.yr}>
+                        <td>{r.yr}{r.yr === retYear ? " (retire)" : ""}</td>
+                        <td className="num">{money(r.p10)}</td>
+                        <td className="num">{money(r.p50)}</td>
+                        <td className="num">{pct(r.p50 > 0 ? r.p10 / r.p50 : 1)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="note dim">
+                  Retirement risk zone (C2): the ±5 years around retirement — a deep P10 dip here is
+                  what turns an average-good plan into a bad-luck failure.
+                </p>
+              </>
+            )}
           </>
         )}
         <p className="note dim" data-testid="risk-note">
@@ -300,7 +409,7 @@ export function MonteCarlo({ db, version, refresh }: { db: AppDatabase; version:
               saveScenarioRun(db, `MC ${new Date().toISOString().slice(0, 10)}`, {
                 seed: run.params.seed,
                 trials: run.params.trials,
-                sliders: { extraSavings, retireShift, retSpendPct, longSd, shockPct, stressMode, stressWindow },
+                sliders: { extraSavings, retireShift, retSpendPct, longSd, shockPct, ssShift, gapYears, stressMode, stressWindow },
                 assumptionsHash: run.marketHash,
                 essentialShare: run.params.essentialShare,
                 result: { ruinRate: s.ruinRate, floorBreachRate: s.floorBreachRate, successRate: s.successRate, goals: s.goals },

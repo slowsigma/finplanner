@@ -90,18 +90,27 @@ export function CashFlow({ db, version, refresh }: { db: AppDatabase; version: n
           <FormRow
             testid="add-income"
             onSubmit={(values) =>
-              tryRun(() =>
+              tryRun(() => {
+                const personId = String(values.get("person_id"));
+                const kind = String(values.get("kind"));
+                let claimingAge: number | null = null;
+                let startYear = new Date().getFullYear();
+                if (kind === "social_security") {
+                  claimingAge = Number(values.get("claim_age") || 67);
+                  const person = persons.find((x) => x.id === personId);
+                  if (person) startYear = person.birth_year + claimingAge;
+                }
                 addIncome(db, {
-                  person_id: String(values.get("person_id")),
+                  person_id: personId,
                   label: String(values.get("label")),
-                  kind: String(values.get("kind")),
+                  kind,
                   annual_amount: Number(values.get("annual_amount")),
                   growth_real: Number(values.get("growth") || 0) / 100,
-                  start_year: new Date().getFullYear(),
+                  start_year: startYear,
                   end_year: null,
-                  claiming_age: null,
-                }),
-              )
+                  claiming_age: claimingAge,
+                });
+              })
             }
           >
             <Field label="Person">
@@ -117,6 +126,7 @@ export function CashFlow({ db, version, refresh }: { db: AppDatabase; version: n
             </Field>
             <Field label="$ per year"><input type="number" name="annual_amount" required data-testid="income-amount" /></Field>
             <Field label="Real growth %"><input type="number" name="growth" step="0.1" data-testid="income-growth" /></Field>
+            <Field label="SS claim age"><input type="number" name="claim_age" min="62" max="70" step="1" data-testid="income-claim-age" /></Field>
             <Submit label="Add income" />
           </FormRow>
         )}

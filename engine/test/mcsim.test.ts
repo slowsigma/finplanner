@@ -482,3 +482,49 @@ describe("stress replay (B2.6)", () => {
     expect(() => simulatePlanMonteCarlo(mk({ stress: stressOf("all", 20) }))).toThrow(/shorter than window/);
   });
 });
+
+describe("sequence-risk score (C3)", () => {
+  it("is null when every path succeeds", () => {
+    const p: McSimParams = {
+      projection: baseProjection(),
+      market: market(0.18),
+      goals: [],
+      withdrawalRate: 0.04,
+      seed: 7,
+      trials: 128,
+      essentialShare: 0,
+    };
+    const s = mcSummary(simulatePlanMonteCarlo(p));
+    expect(s.successRate).toBe(1);
+    expect(s.seqRisk).toBeNull();
+  });
+
+  it("failures cluster in below-median early markets for a drawdown plan", () => {
+    const p: McSimParams = {
+      projection: baseProjection({
+        horizonYears: 30,
+        accounts: [
+          { id: "broker", type: "taxable", initialBalance: 150_000, allocations: [{ assetClass: "us_equity", weight: 1 }] },
+        ],
+        assetReturns: { us_equity: 0.05 },
+        spending: { annualNow: 9_000, annualRetirement: 9_000, retirementStartYear: START },
+      }),
+      market: market(0.28, 0.05),
+      goals: [],
+      withdrawalRate: 0.04,
+      seed: 11,
+      trials: 2000,
+      essentialShare: 0.7,
+    };
+    const r = simulatePlanMonteCarlo(p);
+    const s = mcSummary(r);
+    expect(s.seqRisk).not.toBeNull();
+    expect(s.seqRisk!.failedTrials).toBeGreaterThan(20);
+    expect(s.seqRisk!.failedTrials).toBeLessThan(r.trials - 20);
+    // Without sequence sensitivity the share would hover at 0.5.
+    expect(s.seqRisk!.failEarlyShare).toBeGreaterThan(0.6);
+    expect(s.seqRisk!.earlyYears).toBe(10);
+    const s2 = mcSummary(simulatePlanMonteCarlo(p));
+    expect(s2.seqRisk).toEqual(s.seqRisk);
+  });
+});
