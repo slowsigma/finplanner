@@ -75,7 +75,7 @@ export const DEFAULT_ASSUMPTIONS: AssumptionsData = {
   },
   withdrawalRate: 0.04,
   blendedRealReturn: 0.05,
-  note: "Unvalidated real-return placeholders — replace with sourced assumption set before beta.",
+  note: "Unvalidated real-return placeholders — replace with sourced assumption set before beta (provenance id: market-us-1970-2024-placeholder).",
 };
 
 /** Accepts pre-M3 (label-only, no vol/corr) stored shapes and fills defaults. */

@@ -18,6 +18,14 @@ export {
 } from "./wrappers.ts";
 export type { EmployerMatchRule, WrapperRules, WrapperType } from "./wrappers.ts";
 export { projectPlan } from "./projector.ts";
+export {
+  RMD_TAIL_DENOMINATOR,
+  UNIFORM_LIFETIME_DENOMINATORS,
+  requiredMinimumDistribution,
+  rmdRequiredBeginningAge,
+  uniformLifetimeDenominator,
+  type RmdBasis,
+} from "./rmd.ts";
 export { assessGoal, assessGoals, fiAssessment, fiNumber, requiredAnnualSavings } from "./goals.ts";
 export type { FiAssessment, GoalAssessment, GoalKind, GoalSpec } from "./goals.ts";
 export type { AccountAllocation,

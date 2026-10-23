@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 // ToU1 clickwrap + ToU2 recorded acceptance + ToU3 persistent notices.
-// The text is the counsel DRAFT (docs/LEGAL_TERMS_DRAFT.md, D14) bundled
-// locally — swapping in the attorney-approved final text is a file swap +
+// The text is docs/LEGAL_TERMS.md v1.0 (owner-approved, NOT attorney-reviewed
+// — D14) bundled locally; counsel review, when it happens, is a file swap +
 // TOU_VERSION bump, which re-prompts every existing user.
 import { useEffect, useRef, useState } from "react";
-import TOU_MD from "../../../docs/LEGAL_TERMS_DRAFT.md?raw";
+import TOU_MD from "../../../docs/LEGAL_TERMS.md?raw";
 import type { AppDatabase } from "../db/sqlite.ts";
 import { clearTouAcceptance, listTouAcceptance, recordTouAcceptance } from "../db/repo.ts";
 
-export const TOU_VERSION = "0.1-draft";
+export const TOU_VERSION = "1.0";
 
 export const TOU_FOOTER =
   "Projections are model outputs from your assumptions — not advice or predictions. Verify before acting; consult a licensed professional.";
@@ -61,8 +61,10 @@ export function TermsGate({ db, onAccept }: { db: AppDatabase; onAccept: () => v
     <div className="tou-gate" data-testid="tou-gate">
       <h2>Before you begin — please read and agree</h2>
       <p className="dim">
-        Terms version {TOU_VERSION} · DRAFT pending counsel sign-off · fully local;
-        your data and this agreement never leave this device.
+        Terms version {TOU_VERSION} · owner-approved and not attorney-reviewed — that is a note
+        about how the text was drafted, not a limit on it: the terms below take effect exactly
+        as written when you accept, and bind you and us equally. Fully local; your data and
+        this agreement never leave this device.
       </p>
       <TermsText scrollRef={boxRef} />
       <label className="tou-check">
@@ -81,8 +83,9 @@ export function TermsGate({ db, onAccept }: { db: AppDatabase; onAccept: () => v
           type="button"
           data-testid="tou-agree"
           disabled={!read || !checked}
-          onClick={() => {
+          onClick={async () => {
             recordTouAcceptance(db, TOU_VERSION);
+            await db.persist();
             onAccept();
           }}
         >
@@ -113,8 +116,9 @@ export function TermsSettingsCard({ db, onReset }: { db: AppDatabase; onReset: (
         <button
           type="button"
           data-testid="tou-reset"
-          onClick={() => {
+          onClick={async () => {
             clearTouAcceptance(db);
+            await db.persist();
             onReset();
           }}
         >

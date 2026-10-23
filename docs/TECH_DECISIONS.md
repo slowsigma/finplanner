@@ -261,10 +261,13 @@ Product-level mechanics (feature spec ToU1–ToU3):
   implied-warranty disclaimers, liability limitation, no-professional-services statement,
   and jurisdiction fit. This decision records *what* we commit to, not the text.
 
-Follow-up: lawyer review of ToU/disclaimer text before public beta. Proposed draft
-language (clickwrap screen, full ToU, inline notices) in `LEGAL_TERMS_DRAFT.md` v0.1 —
+Follow-up: lawyer review of ToU/disclaimer text. v0.1 draft (`LEGAL_TERMS_DRAFT.md`) was
 web-researched against standard "not financial advice" clauses, UCC conspicuous-
-disclaimer conventions, and Apache-2.0 §§15–16; needs `[BRACKETS]` filled + counsel sign-off.
+disclaimer conventions, and Apache-2.0 §§15–16. **2026-10-23 update:** the owner elected
+to ship `LEGAL_TERMS.md` v1.0 owner-approved (party: Philip Fucich d/b/a FinPlanner;
+governing law: Texas; contact: slowsigma@hotmail.com) with the "NOT reviewed by an
+attorney" label kept conspicuous in-app; counsel review is now a recommended post-beta
+follow-up rather than a public-beta gate.
 
 ---
 

@@ -26,7 +26,7 @@ never restates them, only sequences them.
 | ------------------------------------------------------------------------- | ------------------- | -------------------------------------- |
 | Tax-wrapper abstraction: US-only hard-coding vs. layer from day 1         | M2 data model       | **RESOLVED 2026-10-22 → D15** (US-only schema, `WrapperRules` layer in engine) |
 | Module F: headline differentiator vs. phase-2 depth                       | M5 scope, marketing | decide at M4 exit                      |
-| ToU final language (counsel review, `[BRACKETS]` in LEGAL_TERMS_DRAFT.md) | public beta (M5)    | start counsel outreach at M3           |
+| ToU language: v1.0 shipped owner-approved 2026-10-23 (NOT attorney-reviewed — owner decision, D14 follow-up); counsel review remains recommended post-beta | public beta (M5)    | counsel review after beta if user base grows |
 | HSA rules source validation (IRS, not Wikipedia)                          | B1.3 tax model      | before M2 tax work                     |
 
 ---
@@ -115,7 +115,7 @@ Goal: the differentiating comparison report, legally-shipped product.
   wealth/min spending, expected median lifetime spending; per-lever marginal value (C3.1, C3.2)
 - ToU1–ToU3: first-run clickwrap gate, locally recorded acceptance (date + ToU version),
   persistent "projections, not advice" footer + heightened tax/SS notices (§11.1, D14)
-  — **requires counsel-approved text from LEGAL_TERMS_DRAFT.md; the public-beta blocker.**
+  — **text = docs/LEGAL_TERMS.md v1.0, owner-approved 2026-10-23 with the "not attorney-reviewed" label kept visible in-app (owner decision; counsel review remains a recommended post-beta follow-up).**
 - Behavior/NFR polish: probabilities not point forecasts, drawdown context tables, panic-year
   plan-of-action checklist (§12)
 - Repo public, GitHub Release with static files (D11, D13)

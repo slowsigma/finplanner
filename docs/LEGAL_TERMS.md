@@ -1,12 +1,19 @@
-# FinPlanner — Proposed Terms of Use & Disclaimers (DRAFT)
+# FinPlanner — Terms of Use & Disclaimers
 
-Version: 0.1 draft — **NOT LEGAL ADVICE; must be reviewed and finalized by a licensed
-attorney before public release** (TECH_DECISIONS.md D14 follow-up).
-Date: 2026-10-21
-Sources consulted: standard "Not Financial Advice" clauses (Law Insider clause library),
-UCC §2-312/2-315 all-caps disclaimer conventions, Apache License 2.0 §§15–16,
-and disclaimer practices of consumer financial tools (cFIREsim, Empower/Personal
-Capital, broker calculator notices). Placeholders in `[BRACKETS]` need owner input.
+Version: **1.0** · Effective: 2026-10-23 · Provided by **Philip Fucich d/b/a
+FinPlanner** ("we", "us"). Owner-approved on 2026-10-23; **NOT reviewed by an
+attorney.** That note describes the drafting process only — it does not dilute,
+condition, or waive any provision below. These Terms are written to operate
+exactly as stated, take effect as written when you accept them, and bind you
+and Philip Fucich d/b/a FinPlanner equally — including the disclaimer of
+warranties (§6) and the limitation of liability (§7). Until a counsel review
+occurs, we also label that drafting status conspicuously inside the
+application, as here.
+Contact for notices: slowsigma@hotmail.com.
+Sources consulted: standard "Not Financial Advice" clauses (Law Insider clause
+library), UCC §2-312/2-315 all-caps disclaimer conventions, Apache License 2.0
+§§15–16, and disclaimer practices of consumer financial tools (cFIREsim,
+Empower/Personal Capital, broker calculator notices).
 
 This document defines three surfaces (mapping to FEATURE_SPEC ToU1–ToU3):
 §A first-run clickwrap, §B full Terms of Use, §C persistent inline notices.
@@ -56,7 +63,7 @@ text has been scrolled to the end. Checkbox *not* pre-checked.
 >
 > `[ AGREE AND CONTINUE ]`   `[ DECLINE ]`
 >
-> *Terms version [1.0] · [date] · You can re-read these anytime in Settings.*
+> *Terms version 1.0 · 2026-10-23 · You can re-read these anytime in Settings.*
 
 ---
 
@@ -165,10 +172,11 @@ We may revise these Terms. The current version will be dated and linked from the
 Application. Continued use after a re-presentation constitutes acceptance.
 
 ### 11. Governing law; severability; entire agreement
-These Terms are governed by the laws of the State of `[STATE]`, without regard to
+These Terms are governed by the laws of the State of Texas, without regard to
 conflict-of-law principles. If any provision is held unenforceable, the remainder
 remains in effect. These Terms, together with the Apache License 2.0, are the
-complete agreement regarding your use of the Application. `[Owner entity, jurisdiction, and contact email TBD with counsel.]`
+complete agreement regarding your use of the Application. Notices under these
+Terms may be sent to Philip Fucich d/b/a FinPlanner at slowsigma@hotmail.com.
 
 ---
 
@@ -192,19 +200,3 @@ complete agreement regarding your use of the Application. `[Owner entity, jurisd
 > FinPlanner is a tool, not an adviser: no warranty, no liability, all results are
 > your-assumption-driven models. Use with caution; seek qualified financial, tax,
 > and legal advice before acting.
-
----
-
-## Implementation notes
-
-- ToU2: store `{acceptedVersion, acceptedAtUtc, termsHash}` in the local DB; gate
-  first run behind §A; re-present when `termsHash` changes (major versions only).
-- The all-caps blocks (§B 6–7) must remain conspicuous (caps + distinct block) in
-  both the clickwrap and the settings view — conspicuousness is what makes UCC
-  disclaimers enforceable.
-- `LICENSE` = Apache-2.0; disclaimers there cover *redistributors' downstream*
-  liability too; consider pointing NOTICE at this document.
-- Counsel checklist: jurisdiction/governing law, consumer-law overlays (some
-  states/Countries won't enforce full liability caps on negligence), minors,
-  e-sign/clickwrap record retention, and whether an Advisers Act "publisher /
-  impersonation-less tool" memo is worth having on file.
