@@ -380,3 +380,46 @@ export function listScenarioRuns(db: AppDatabase, limit = 10): ScenarioRunRow[] 
     limit,
   ) as unknown as ScenarioRunRow[];
 }
+
+// ---------------------------------------------------------------- snapshots (M4.5, D13)
+
+export interface PlanSnapshotRow {
+  id: string;
+  household_id: string;
+  name: string;
+  created_at: string;
+  param_version: number;
+  plan_json: string;
+}
+
+const SNAPSHOT_CAP = 50;
+
+export function savePlanSnapshot(
+  db: AppDatabase,
+  snap: { name: string; paramVersion: number; planJson: string },
+): string {
+  const id = uuid();
+  runMut(
+    db,
+    `INSERT INTO plan_snapshots (id, household_id, name, created_at, param_version, plan_json)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    id, householdId(db) ?? "", snap.name, new Date().toISOString(), snap.paramVersion, snap.planJson,
+  );
+  runMut(
+    db,
+    `DELETE FROM plan_snapshots WHERE id NOT IN (
+       SELECT id FROM plan_snapshots ORDER BY created_at DESC LIMIT ?)`,
+    SNAPSHOT_CAP,
+  );
+  return id;
+}
+
+export function listPlanSnapshots(db: AppDatabase): PlanSnapshotRow[] {
+  return db.sql.all(
+    "SELECT * FROM plan_snapshots ORDER BY created_at DESC",
+  ) as unknown as PlanSnapshotRow[];
+}
+
+export function deletePlanSnapshot(db: AppDatabase, id: string): void {
+  runMut(db, "DELETE FROM plan_snapshots WHERE id = ?", id);
+}

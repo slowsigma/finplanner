@@ -116,11 +116,15 @@ Goal: the differentiating comparison report, legally-shipped product.
 - ToU1–ToU3: first-run clickwrap gate, locally recorded acceptance (date + ToU version),
   persistent "projections, not advice" footer + heightened tax/SS notices (§11.1, D14)
   — **text = docs/LEGAL_TERMS.md v1.0, owner-approved 2026-10-23 with the "not attorney-reviewed" label kept visible in-app (owner decision; counsel review remains a recommended post-beta follow-up).**
+- Plan snapshots & diff (M4.5, D13): versioned parameter payloads in `plan_snapshots`
+  (schema v4), side-by-side parameter diff + terminal/runout delta; comparisons read the
+  stored payload, never live tables
 - Behavior/NFR polish: probabilities not point forecasts, drawdown context tables, panic-year
   plan-of-action checklist (§12)
 - Repo public, GitHub Release with static files (D11, D13)
 - **Gate G4 (beta)**: clickwrap + recorded acceptance + egress tests pass in a fresh-profile
-  Playwright run; ToU text counsel-approved; versioned release notes.
+  Playwright run; ToU text = owner-approved v1.0 shipped in-app (counsel review = post-beta
+  follow-up); versioned release notes.
 
 ## M5 — Phase-2 depth (post-beta, prioritizable backlog)
 

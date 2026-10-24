@@ -157,10 +157,26 @@ CREATE TABLE tou_acceptance (
 );
 `;
 
+// M4.5 (D13): plan snapshots — versioned parameter blobs for the diff view.
+// plan_json carries {version, params, market, …}; param_version mirrors that
+// payload version so newer payloads are detectable by readers.
+const PLAN_SNAPSHOTS_V4 = `
+CREATE TABLE plan_snapshots (
+  id            TEXT    NOT NULL PRIMARY KEY,
+  household_id  TEXT    NOT NULL,
+  name          TEXT    NOT NULL,
+  created_at    TEXT    NOT NULL,
+  param_version INTEGER NOT NULL,
+  plan_json     TEXT    NOT NULL
+);
+CREATE INDEX idx_snapshots_household ON plan_snapshots(household_id, created_at);
+`;
+
 export const MIGRATIONS: readonly Migration[] = [
   { version: 1, name: "baseline-v1", sql: BASELINE_V1 },
   { version: 2, name: "projection-fields", sql: PROJECTION_FIELDS_V2 },
   { version: 3, name: "tou-acceptance", sql: TOU_ACCEPTANCE_V3 },
+  { version: 4, name: "plan-snapshots", sql: PLAN_SNAPSHOTS_V4 },
 ];
 
 export const SCHEMA_VERSION: number = MIGRATIONS[MIGRATIONS.length - 1]!.version;

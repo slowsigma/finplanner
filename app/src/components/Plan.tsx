@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import type { AppDatabase } from "../db/sqlite.ts";
 import { buildPlan } from "../plan/build.ts";
+import { Scenarios } from "./Scenarios.tsx";
 import { money } from "./ui.tsx";
 
 export function Plan({ db, version }: { db: AppDatabase; version: number; refresh: () => void }) {
@@ -106,6 +107,7 @@ export function Plan({ db, version }: { db: AppDatabase; version: number; refres
           Projections, not advice — deterministic expected-growth view, no Monte Carlo yet (M3).
         </p>
       </section>
+      <Scenarios db={db} view={view} />
     </>
   );
 }
