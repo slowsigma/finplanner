@@ -53,6 +53,14 @@ function claimShift(
   });
 }
 
+/** Move salary end dates with the "retire later" lever (B2.4). */
+function shiftSalaryRetirement(streams: readonly IncomeStreamSpec[], shift: number): IncomeStreamSpec[] {
+  if (shift === 0) return [...streams];
+  return streams.map((s) =>
+    s.kind === "salary" && s.endYear !== undefined ? { ...s, endYear: s.endYear + shift } : s,
+  );
+}
+
 function Slider(props: {
   testid: string;
   label: string;
@@ -133,7 +141,7 @@ export function MonteCarlo({ db, version, refresh }: { db: AppDatabase; version:
     const base = view.params;
     // SS claiming-age shift (B2.4/D4): move start to birth + effective age and
     // rescale the benefit by the statutory claim factor ratio.
-    let streams = claimShift(base.incomeStreams, ssShift, claimMeta);
+    let streams = shiftSalaryRetirement(claimShift(base.incomeStreams, ssShift, claimMeta), retireShift);
     // Career gap (B2.4): N years of zero salary starting startYear+2; pay raises
     // stop accruing during the gap and resume after it.
     if (gapYears > 0) {
@@ -148,6 +156,7 @@ export function MonteCarlo({ db, version, refresh }: { db: AppDatabase; version:
             id: `${s.id}-postgap`,
             annualAmount: s.annualAmount * (1 + s.growthReal) ** (resume - s.startYear),
             startYear: resume,
+            endYear: s.endYear,
           });
         } else out.push(s);
       }

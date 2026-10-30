@@ -28,17 +28,21 @@ test("Risk tab: seeded Monte Carlo with what-if sliders", async ({ page }) => {
   expect(await ms()).toBeLessThan(2000);
 
   // G3 shape: slider change re-runs synchronously under the 2 s budget.
-  await page.getByTestId("slider-extra-savings").fill("10000");
-  await page.getByTestId("slider-ret-spend").fill("150");
-  await page.getByTestId("slider-longsd").fill("2");
-  await page.getByTestId("slider-shock").fill("12");
-  await page.getByTestId("risk-trials").selectOption("1000");
+  const applyLevers = async () => {
+    await page.getByTestId("slider-extra-savings").fill("10000");
+    await page.getByTestId("slider-ret-spend").fill("150");
+    await page.getByTestId("slider-longsd").fill("2");
+    await page.getByTestId("slider-shock").fill("12");
+    await page.getByTestId("risk-trials").selectOption("1000");
+  };
+  await applyLevers();
   expect(await ms()).toBeLessThan(2000);
 
   const success1 = await page.getByTestId("risk-success").innerText();
   await page.reload();
   await page.getByTestId("nav-risk").click();
-  await expect(page.getByTestId("risk-success")).toHaveText(success1); // same seed ⇒ same numbers
+  await applyLevers();
+  await expect(page.getByTestId("risk-success")).toHaveText(success1); // same seed + inputs ⇒ same numbers
 
   await page.getByTestId("risk-save-run").click();
   await expect(page.getByTestId("risk-saved")).toHaveText(/hash [0-9a-f]{16}/);

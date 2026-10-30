@@ -20,19 +20,19 @@ DATA:OFXSGML
 <OFX>
 <STMTTRN>
 <TRNTYPE>CREDIT
-<DTSTART>20260115120000[-05:00]
+<DTPOSTED>20260115120000[-05:00]
 <AMOUNT>4250.00
 <NAME>ACME PAYROLL
 <FITID>20260115/1
 </STMTTRN>
 <STMTTRN>
 <TRNTYPE>DEBIT
-<DTSTART>20260118
+<DTPOSTED>20260118
 <AMOUNT>-84.15
 <MEMO>GROCERS #1234
 </STMTTRN>
 <STMTTRN>
-<DTSTART>not-a-date
+<DTPOSTED>not-a-date
 <AMOUNT>10.00
 </STMTTRN>
 </OFX>`;
@@ -74,6 +74,12 @@ describe("OFX import (A3)", () => {
     expect(r.transactions[0]).toMatchObject({ date: "2026-01-15", amount: 4250, description: "ACME PAYROLL", fitid: "20260115/1" });
     expect(r.transactions[1]).toMatchObject({ date: "2026-01-18", amount: -84.15, description: "GROCERS #1234" });
     expect(r.warnings.join(" ")).toContain("1 transaction");
+  });
+
+  it("does not use statement DTSTART as a transaction date", () => {
+    const r = parseOfx("<OFX><STMTTRN><DTSTART>20260115<AMOUNT>10</STMTTRN></OFX>");
+    expect(r.transactions).toHaveLength(0);
+    expect(r.warnings.join(" ")).toContain("DTPOSTED");
   });
 });
 

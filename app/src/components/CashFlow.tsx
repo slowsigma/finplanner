@@ -85,6 +85,10 @@ export function CashFlow({ db, version, refresh }: { db: AppDatabase; version: n
             {income.length === 0 && <tr><td colSpan={6} className="dim">No income streams yet.</td></tr>}
           </tbody>
         </table>
+        <p className="note dim">
+          Salary streams stop the year before the owner's planned retirement age. Other income
+          continues unless the imported data specifies an end year.
+        </p>
         {error && <p className="err">{error}</p>}
         {persons.length > 0 && (
           <FormRow

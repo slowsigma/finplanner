@@ -2,14 +2,17 @@
 import { useEffect, useRef, useState } from "react";
 import type { AppDatabase } from "../db/sqlite.ts";
 import {
+  addLiability,
+  deleteLiability,
   householdId,
   listAccounts,
+  listLiabilities,
   listPersons,
   listSnapshots,
   netWorthNow,
   recordSnapshot,
 } from "../db/repo.ts";
-import { Field, FormRow, Submit, money } from "./ui.tsx";
+import { DeleteButton, Field, FormRow, Submit, money } from "./ui.tsx";
 
 export function NetWorth({ db, version, refresh }: { db: AppDatabase; version: number; refresh: () => void }) {
   const [error, setError] = useState("");
@@ -17,6 +20,7 @@ export function NetWorth({ db, version, refresh }: { db: AppDatabase; version: n
   const household = householdId(db);
   const persons = new Map(listPersons(db).map((p) => [p.id, p.name]));
   const accounts = listAccounts(db);
+  const liabilities = listLiabilities(db);
   const now = netWorthNow(db);
   const snapshots = listSnapshots(db);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -50,6 +54,16 @@ export function NetWorth({ db, version, refresh }: { db: AppDatabase; version: n
       ctx.fill();
     }
   }, [snapshots.length]);
+
+  const guard = (fn: () => void) => {
+    setError("");
+    try {
+      fn();
+      refresh();
+    } catch (e) {
+      setError(String(e));
+    }
+  };
 
   const byOwner = new Map<string, { assets: number; rows: number }>();
   for (const a of accounts) {
@@ -114,6 +128,75 @@ export function NetWorth({ db, version, refresh }: { db: AppDatabase; version: n
             </tr>
           </tbody>
         </table>
+      </section>
+
+      <section className="card">
+        <h2>Liabilities (A1)</h2>
+        <table data-testid="liabilities-table">
+          <thead>
+            <tr><th>Owner</th><th>Label</th><th>Type</th><th className="num">Balance</th><th className="num">Rate</th><th className="num">Annual payment</th><th /></tr>
+          </thead>
+          <tbody>
+            {liabilities.map((l) => (
+              <tr key={l.id}>
+                <td>{l.person_id ? persons.get(l.person_id) ?? "?" : "Household"}</td>
+                <td>{l.label}</td>
+                <td>{l.type.replaceAll("_", " ")}</td>
+                <td className="num">{money(l.balance)}</td>
+                <td className="num">{(l.rate * 100).toFixed(1)}%</td>
+                <td className="num">{money(l.annual_payment)}</td>
+                <td><DeleteButton testid={`delete-liability-${l.id}`} onDelete={() => guard(() => deleteLiability(db, l.id))} /></td>
+              </tr>
+            ))}
+            {liabilities.length === 0 && (
+              <tr><td colSpan={7} className="dim">No liabilities yet — mortgages, student loans, autos.</td></tr>
+            )}
+            <tr className="total">
+              <td colSpan={3}>Household liabilities</td>
+              <td className="num">{money(now.liabilities)}</td>
+              <td colSpan={3} />
+            </tr>
+          </tbody>
+        </table>
+        {household !== undefined && (
+          <FormRow
+            testid="add-liability"
+            onSubmit={(values) =>
+              guard(() => {
+                const owner = String(values.get("owner") || "");
+                addLiability(db, {
+                  person_id: owner === "" ? null : owner,
+                  label: String(values.get("label")),
+                  type: String(values.get("type")),
+                  balance: Number(values.get("balance")),
+                  rate: Number(values.get("rate")) / 100,
+                  annual_payment: Number(values.get("annual_payment")),
+                  payoff_year: null,
+                });
+              })
+            }
+          >
+            <Field label="Owner">
+              <select name="owner" data-testid="liability-owner">
+                <option value="">Household</option>
+                {[...persons.entries()].map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+              </select>
+            </Field>
+            <Field label="Label"><input type="text" name="label" required data-testid="liability-label" /></Field>
+            <Field label="Type">
+              <select name="type" data-testid="liability-type">
+                {["mortgage", "student", "auto", "other"].map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </Field>
+            <Field label="Balance $"><input type="number" name="balance" required min={0} data-testid="liability-balance" /></Field>
+            <Field label="Rate %"><input type="number" name="rate" required min={0} step="0.1" data-testid="liability-rate" /></Field>
+            <Field label="Annual payment $"><input type="number" name="annual_payment" required min={0} data-testid="liability-payment" /></Field>
+            <Submit label="Add liability" />
+          </FormRow>
+        )}
+        <p className="note dim">
+          Liability balances reduce net worth; annual payments are included in the deterministic and Monte Carlo projections.
+        </p>
       </section>
 
       <section className="card">

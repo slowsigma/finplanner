@@ -188,10 +188,13 @@ export function buildPlan(db: AppDatabase): PlanView | { error: string } {
     };
   });
 
-  const retirementAges = persons
-    .filter((p) => p.planned_retirement_age !== null)
-    .map((p) => p.birth_year + (p.planned_retirement_age as number));
-  const retirementStartYear = retirementAges.length > 0 ? Math.min(...retirementAges) : null;
+  const retirementYearByPerson = new Map(
+    persons
+      .filter((p) => p.planned_retirement_age !== null)
+      .map((p) => [p.id, p.birth_year + (p.planned_retirement_age as number)] as const),
+  );
+  const retirementStartYear =
+    retirementYearByPerson.size > 0 ? Math.min(...retirementYearByPerson.values()) : null;
 
   const spending = getSpending(db);
   const deathYears = persons.map((p) => p.birth_year + (p.life_expectancy_age ?? 95));
@@ -204,14 +207,21 @@ export function buildPlan(db: AppDatabase): PlanView | { error: string } {
     horizonYears,
     accounts: specs,
     assetReturns: assumptions.assetReturns,
-    incomeStreams: listIncome(db).map((i) => ({
-      id: i.id,
-      kind: i.kind as IncomeKind,
-      annualAmount: i.annual_amount,
-      growthReal: i.growth_real,
-      startYear: i.start_year,
-      endYear: i.end_year ?? undefined,
-    })),
+    incomeStreams: listIncome(db).map((i) => {
+      let endYear = i.end_year ?? undefined;
+      if (endYear === undefined && i.kind === "salary") {
+        const retirementYear = retirementYearByPerson.get(i.person_id);
+        if (retirementYear !== undefined) endYear = retirementYear - 1;
+      }
+      return {
+        id: i.id,
+        kind: i.kind as IncomeKind,
+        annualAmount: i.annual_amount,
+        growthReal: i.growth_real,
+        startYear: i.start_year,
+        endYear,
+      };
+    }),
     liabilities: listLiabilities(db).map((l) => ({
       id: l.id,
       balance: l.balance,

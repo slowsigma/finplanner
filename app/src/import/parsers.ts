@@ -141,7 +141,7 @@ export function parseOfx(text: string): ParseResult {
   const transactions: ParsedTransaction[] = [];
   let skipped = 0;
   for (const block of blocks) {
-    const rawDate = ofxTag(block, "DTSTART");
+    const rawDate = ofxTag(block, "DTPOSTED") ?? ofxTag(block, "DTUSER");
     const rawAmount = ofxTag(block, "AMOUNT");
     const date = rawDate ? parseDate(rawDate) : null;
     const amount = rawAmount ? parseAmount(rawAmount) : null;
@@ -154,7 +154,7 @@ export function parseOfx(text: string): ParseResult {
       ...(fitid ? { fitid } : {}),
     });
   }
-  if (skipped > 0) warnings.push(`${skipped} transaction(s) skipped: unparseable DTSTART or AMOUNT`);
+  if (skipped > 0) warnings.push(`${skipped} transaction(s) skipped: unparseable DTPOSTED or AMOUNT`);
   return { transactions, warnings };
 }
 
