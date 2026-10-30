@@ -22,8 +22,13 @@ export async function opfsRead(): Promise<Uint8Array | undefined> {
     const handle = await root.getFileHandle(DB_FILE);
     const file = await handle.getFile();
     return new Uint8Array(await file.arrayBuffer());
-  } catch {
-    return undefined; // no snapshot yet (fresh install)
+  } catch (error) {
+    // Missing file is a fresh install; any other failure must not be treated
+    // as "no data", or the next mutation could overwrite a recoverable snapshot.
+    if (typeof error === "object" && error !== null && "name" in error && error.name === "NotFoundError") {
+      return undefined;
+    }
+    throw error;
   }
 }
 

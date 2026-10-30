@@ -5,7 +5,7 @@
 // the classic `oo1` C-wrapper API we use is typed here explicitly.
 
 import initSqlite3 from "@sqlite.org/sqlite-wasm";
-import type { BindValue, SqlDatabase } from "@finplanner/shared-schema";
+import { migrate, type BindValue, type SqlDatabase } from "@finplanner/shared-schema";
 import { opfsWrite } from "./persist.ts";
 
 export interface Sqlite3Statics {
@@ -37,7 +37,23 @@ function sqlite3(): Promise<Sqlite3Statics> {
   return staticsPromise;
 }
 
+function sqlAdapter(db: Sqlite3Database): SqlDatabase {
+  return {
+    exec: (sql) => db.exec(sql),
+    run: (sql, ...params) => {
+      db.exec({ sql, bind: params });
+    },
+    all: (sql, ...params) =>
+      db.exec({ sql, bind: params, rowMode: "object", returnValue: "resultRows" }) as Record<string, unknown>[],
+    get: (sql, ...params) =>
+      (db.exec({ sql, bind: params, rowMode: "object", returnValue: "resultRows" }) as Record<string, unknown>[])[0],
+  };
+}
+
 export class AppDatabase {
+  /** Serializes snapshot writes so an older persist cannot land after a newer one. */
+  private persistQueue: Promise<void> = Promise.resolve();
+
   private constructor(
     readonly sqlite3: Sqlite3Statics,
     readonly db: Sqlite3Database,
@@ -54,23 +70,17 @@ export class AppDatabase {
   }
 
   /** Snapshot the live database to OPFS (call after every mutation). */
-  async persist(): Promise<void> {
-    if (this.persistent) await opfsWrite(this.serialize());
+  persist(): Promise<void> {
+    if (!this.persistent) return Promise.resolve();
+    const bytes = this.serialize();
+    const write = this.persistQueue.then(() => opfsWrite(bytes));
+    this.persistQueue = write.catch(() => {});
+    return write;
   }
 
   /** Adapter for the shared migration runner and repositories. */
   get sql(): SqlDatabase {
-    const db = this.db;
-    return {
-      exec: (sql) => db.exec(sql),
-      run: (sql, ...params) => {
-        db.exec({ sql, bind: params });
-      },
-      all: (sql, ...params) =>
-        db.exec({ sql, bind: params, rowMode: "object", returnValue: "resultRows" }) as Record<string, unknown>[],
-      get: (sql, ...params) =>
-        (db.exec({ sql, bind: params, rowMode: "object", returnValue: "resultRows" }) as Record<string, unknown>[])[0],
-    };
+    return sqlAdapter(this.db);
   }
 
   /** Whole-file snapshot for the encrypted export container (D3 backup). */
@@ -93,8 +103,8 @@ export class AppDatabase {
 
   /**
    * Replace the live database's contents with a deserialized copy (import
-   * & wipe). Hot-backup'd into the live OPFS file so the on-disk state
-   * stays consistent; refuses data that fails an integrity check.
+   * & wipe). Upgrades old exports before swapping, and refuses data that
+   * fails an integrity check or comes from a newer schema.
    */
   import(bytes: Uint8Array): void {
     const s = this.sqlite3;
@@ -110,6 +120,9 @@ export class AppDatabase {
       const check = tmp.exec({ sql: "PRAGMA integrity_check", rowMode: "array", returnValue: "resultRows" }) as unknown[][];
       const verdict = String(check[0]?.[0]);
       if (verdict !== "ok") throw new Error(`imported database failed integrity_check: ${verdict}`);
+      // Upgrade the candidate before replacing live data: old exports open,
+      // future exports fail without touching the current database.
+      migrate(sqlAdapter(tmp));
       const backup = capi["sqlite3_backup_init"]!(this.db.pointer, "main", tmp.pointer, "main");
       if (!backup) throw new Error(`backup_init failed: ${String(capi["sqlite3_errmsg"]!(this.db.pointer))}`);
       // SQLITE_BUSY = 5, SQLITE_LOCKED = 6, SQLITE_DONE = 101

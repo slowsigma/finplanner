@@ -58,4 +58,13 @@ test("Plan tab: deterministic projection renders from entered data", async ({ pa
   await expect(firstDataRow).toContainText(String(thisYear));
   await expect(firstDataRow).toContainText("$5,000"); // contribution
   await expect(firstDataRow).toContainText("$2,500"); // 50% match up to 6% salary
+
+  // Salary ends before Alex's planned retirement age (1988 + 62 = 2050).
+  const yearRow = (year: number) =>
+    page.getByTestId("plan-table").getByRole("row").filter({
+      has: page.getByRole("cell", { name: String(year), exact: true }),
+    });
+  const retirementYear = 1988 + 62;
+  await expect(yearRow(retirementYear - 1).getByRole("cell").nth(1)).not.toHaveText("$0");
+  await expect(yearRow(retirementYear).getByRole("cell").nth(1)).toHaveText("$0");
 });
